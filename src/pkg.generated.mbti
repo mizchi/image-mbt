@@ -1,14 +1,20 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/image-mbt"
+package "mizchi/image"
 
 // Values
+pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
+
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
 
+pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
+
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
 
 pub fn package_name() -> String
+
+pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 
 // Errors
 pub(all) suberror DecodeError {
@@ -56,6 +62,14 @@ pub(all) struct ImageData {
 }
 pub impl Eq for ImageData
 pub impl Show for ImageData
+
+pub(all) enum ResizeMethod {
+  Nearest
+  Bilinear
+  Bicubic
+}
+pub impl Eq for ResizeMethod
+pub impl Show for ResizeMethod
 
 // Type aliases
 

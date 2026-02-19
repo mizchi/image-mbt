@@ -1,4 +1,11 @@
 ///|
+pub(all) enum ResizeMethod {
+  Nearest
+  Bilinear
+  Bicubic
+} derive(Eq, Show)
+
+///|
 pub(all) struct ImageData {
   width : Int
   height : Int

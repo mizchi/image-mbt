@@ -71,15 +71,24 @@ pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
     [b'\x49', b'\x48', b'\x44', b'\x52'],
     Bytes::from_array(ihdr_data),
   )
-  // Build raw scanlines: filter byte (0=None) + RGBA data per row
+  // Build raw scanlines with adaptive filtering
   let stride = width * 4
+  let bpp = 4
   let raw_len = height * (1 + stride)
   let raw = FixedArray::make(raw_len, b'\x00')
+  let mut prev_row = Bytes::new(stride)
   for y in 0..<height {
     let raw_offset = y * (1 + stride)
-    raw[raw_offset] = b'\x00' // filter None
     let src_offset = y * stride
-    raw.blit_from_bytes(raw_offset + 1, img.data, src_offset, stride)
+    let row_buf = FixedArray::make(stride, b'\x00')
+    row_buf.blit_from_bytes(0, img.data, src_offset, stride)
+    let row = Bytes::from_array(row_buf)
+    let (filter_type, filtered) = select_best_filter(row, prev_row, bpp)
+    raw[raw_offset] = filter_type.to_byte()
+    for i in 0..<stride {
+      raw[raw_offset + 1 + i] = filtered[i]
+    }
+    prev_row = row
   }
   let compressed = @zlib.zlib_compress(Bytes::from_array(raw))
   let idat_chunk = encode_chunk(

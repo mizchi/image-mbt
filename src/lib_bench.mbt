@@ -65,3 +65,39 @@ test "bench: PNG roundtrip 64x64" (b : @bench.T) {
     }
   })
 }
+
+///|
+test "bench: resize nearest 64x64 -> 128x128" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 128, 128, Nearest)) catch { _ => () } })
+}
+
+///|
+test "bench: resize bilinear 64x64 -> 128x128" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 128, 128, Bilinear)) catch { _ => () } })
+}
+
+///|
+test "bench: resize bicubic 64x64 -> 128x128" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 128, 128, Bicubic)) catch { _ => () } })
+}
+
+///|
+test "bench: resize nearest 64x64 -> 32x32" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 32, 32, Nearest)) catch { _ => () } })
+}
+
+///|
+test "bench: resize bilinear 64x64 -> 32x32" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 32, 32, Bilinear)) catch { _ => () } })
+}
+
+///|
+test "bench: resize bicubic 64x64 -> 32x32" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(resize(img, 32, 32, Bicubic)) catch { _ => () } })
+}
