@@ -121,7 +121,30 @@ fn receive_extend(br : JpegBitReader, nbits : Int) -> Int raise DecodeError {
 }
 
 ///|
-// IDCT: simple direct computation (not optimized)
+// Pre-computed IDCT cosine table: cos((2*n+1)*k*PI/16) for n,k in 0..7
+// idct_cos_table[n * 8 + k] = cos((2*n+1)*k*PI/16)
+let idct_cos_table : FixedArray[Double] = {
+  let t = FixedArray::make(64, 0.0)
+  for n in 0..<8 {
+    for k in 0..<8 {
+      t[n * 8 + k] = @math.cos(
+        (2.0 * n.to_double() + 1.0) * k.to_double() * @math.PI / 16.0,
+      )
+    }
+  }
+  t
+}
+
+///|
+// C(k) scaling factor: 1/sqrt(2) for k=0, 1.0 otherwise
+let idct_c : FixedArray[Double] = {
+  let c = FixedArray::make(8, 1.0)
+  c[0] = 1.0 / 2.0.sqrt()
+  c
+}
+
+///|
+// IDCT using pre-computed cosine table
 fn idct_block(coeff : FixedArray[Int], output : FixedArray[Int]) -> Unit {
   let tmp = FixedArray::make(64, 0.0)
   // First pass: columns
@@ -129,12 +152,9 @@ fn idct_block(coeff : FixedArray[Int], output : FixedArray[Int]) -> Unit {
     for y in 0..<8 {
       let mut sum = 0.0
       for u in 0..<8 {
-        let cu = if u == 0 { 1.0 / 2.0.sqrt() } else { 1.0 }
-        sum += cu *
+        sum += idct_c[u] *
           coeff[u * 8 + x].to_double() *
-          @math.cos(
-            (2.0 * y.to_double() + 1.0) * u.to_double() * @math.PI / 16.0,
-          )
+          idct_cos_table[y * 8 + u]
       }
       tmp[y * 8 + x] = sum
     }
@@ -144,12 +164,7 @@ fn idct_block(coeff : FixedArray[Int], output : FixedArray[Int]) -> Unit {
     for x in 0..<8 {
       let mut sum = 0.0
       for v in 0..<8 {
-        let cv = if v == 0 { 1.0 / 2.0.sqrt() } else { 1.0 }
-        sum += cv *
-          tmp[y * 8 + v] *
-          @math.cos(
-            (2.0 * x.to_double() + 1.0) * v.to_double() * @math.PI / 16.0,
-          )
+        sum += idct_c[v] * tmp[y * 8 + v] * idct_cos_table[x * 8 + v]
       }
       let val = (sum / 4.0 + 128.0).to_int()
       output[y * 8 + x] = if val < 0 {

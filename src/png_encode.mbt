@@ -19,17 +19,11 @@ fn encode_chunk(chunk_type : FixedArray[Byte], data : Bytes) -> Bytes {
   buf[6] = chunk_type[2]
   buf[7] = chunk_type[3]
   // Data
-  for i in 0..<len {
-    buf[8 + i] = data[i]
-  }
+  buf.blit_from_bytes(8, data, 0, len)
   // CRC over type + data
   let crc_input = FixedArray::make(4 + len, b'\x00')
-  for i in 0..<4 {
-    crc_input[i] = chunk_type[i]
-  }
-  for i in 0..<len {
-    crc_input[4 + i] = data[i]
-  }
+  chunk_type.blit_to(crc_input, len=4)
+  crc_input.blit_from_bytes(4, data, 0, len)
   let crc = @zlib.crc32_fixed(crc_input)
   write_u32be(buf, 8 + len, crc)
   Bytes::from_array(buf)
@@ -85,9 +79,7 @@ pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
     let raw_offset = y * (1 + stride)
     raw[raw_offset] = b'\x00' // filter None
     let src_offset = y * stride
-    for x in 0..<stride {
-      raw[raw_offset + 1 + x] = img.data[src_offset + x]
-    }
+    raw.blit_from_bytes(raw_offset + 1, img.data, src_offset, stride)
   }
   let compressed = @zlib.zlib_compress(Bytes::from_array(raw))
   let idat_chunk = encode_chunk(
@@ -107,24 +99,16 @@ pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
   let result = FixedArray::make(total_len, b'\x00')
   let mut pos = 0
   // Signature
-  for i in 0..<8 {
-    result[pos + i] = sig[i]
-  }
+  sig.blit_to(result, len=8)
   pos += 8
   // IHDR
-  for i in 0..<ihdr_chunk.length() {
-    result[pos + i] = ihdr_chunk[i]
-  }
+  result.blit_from_bytes(pos, ihdr_chunk, 0, ihdr_chunk.length())
   pos += ihdr_chunk.length()
   // IDAT
-  for i in 0..<idat_chunk.length() {
-    result[pos + i] = idat_chunk[i]
-  }
+  result.blit_from_bytes(pos, idat_chunk, 0, idat_chunk.length())
   pos += idat_chunk.length()
   // IEND
-  for i in 0..<iend_chunk.length() {
-    result[pos + i] = iend_chunk[i]
-  }
+  result.blit_from_bytes(pos, iend_chunk, 0, iend_chunk.length())
   pos += iend_chunk.length()
   ignore(pos)
   Bytes::from_array(result)

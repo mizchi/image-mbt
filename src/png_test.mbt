@@ -89,12 +89,8 @@ fn make_chunk(chunk_type : Bytes, data : Bytes) -> Bytes {
   len_bytes[3] = len.land(0xFF).to_byte()
   // CRC over type + data
   let crc_input = FixedArray::make(4 + len, b'\x00')
-  for i in 0..<4 {
-    crc_input[i] = chunk_type[i]
-  }
-  for i in 0..<len {
-    crc_input[4 + i] = data[i]
-  }
+  crc_input.blit_from_bytes(0, chunk_type, 0, 4)
+  crc_input.blit_from_bytes(4, data, 0, len)
   let crc = @zlib.crc32_fixed(crc_input)
   let crc_bytes = FixedArray::make(4, b'\x00')
   crc_bytes[0] = (crc >> 24).land(0xFFU).to_byte()
@@ -115,10 +111,8 @@ fn concat_bytes(parts : Array[Bytes]) -> Bytes {
   let buf = FixedArray::make(total, b'\x00')
   let mut offset = 0
   for part in parts {
-    for i in 0..<part.length() {
-      buf[offset] = part[i]
-      offset += 1
-    }
+    buf.blit_from_bytes(offset, part, 0, part.length())
+    offset += part.length()
   }
   Bytes::from_array(buf)
 }

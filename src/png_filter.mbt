@@ -25,10 +25,7 @@ fn reconstruct_row(
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
   match filter_type {
-    0 =>
-      for i in 0..<len {
-        buf[i] = row[i]
-      }
+    0 => buf.blit_from_bytes(0, row, 0, len)
     1 =>
       for i in 0..<len {
         let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
@@ -60,7 +57,10 @@ fn reconstruct_row(
 ///|
 /// Apply filter to a row (encode side). Currently only None filter (type 0).
 fn filter_row(row : Bytes, _prev : Bytes, _bpp : Int) -> Bytes {
-  Bytes::from_array(FixedArray::makei(row.length(), fn(i) { row[i] }))
+  let len = row.length()
+  let buf = FixedArray::make(len, b'\x00')
+  buf.blit_from_bytes(0, row, 0, len)
+  Bytes::from_array(buf)
 }
 
 ///|

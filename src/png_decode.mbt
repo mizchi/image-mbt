@@ -77,9 +77,7 @@ fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
     // CRC covers chunk type + data
     let crc_data_len = 4 + length
     let crc_buf = FixedArray::make(crc_data_len, b'\x00')
-    for i in 0..<crc_data_len {
-      crc_buf[i] = raw[pos + 4 + i]
-    }
+    crc_buf.blit_from_bytes(0, raw, pos + 4, crc_data_len)
     let computed_crc = @zlib.crc32_fixed(crc_buf)
     let stored_crc = read_u32be(raw, pos + 8 + length)
     if computed_crc != stored_crc {
@@ -88,9 +86,7 @@ fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
     // Extract chunk data
     let chunk_data = if length > 0 {
       let buf = FixedArray::make(length, b'\x00')
-      for i in 0..<length {
-        buf[i] = raw[pos + 8 + i]
-      }
+      buf.blit_from_bytes(0, raw, pos + 8, length)
       Bytes::from_array(buf)
     } else {
       Bytes::new(0)
@@ -130,10 +126,8 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
   let idat_buf = FixedArray::make(total_idat_len, b'\x00')
   let mut offset = 0
   for part in idat_parts {
-    for i in 0..<part.length() {
-      idat_buf[offset] = part[i]
-      offset += 1
-    }
+    idat_buf.blit_from_bytes(offset, part, 0, part.length())
+    offset += part.length()
   }
   let compressed = Bytes::from_array(idat_buf)
   // Decompress
@@ -160,9 +154,7 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
     let filter_type = decompressed[row_offset].to_int()
     // Extract filtered row data
     let filtered = FixedArray::make(stride, b'\x00')
-    for i in 0..<stride {
-      filtered[i] = decompressed[row_offset + 1 + i]
-    }
+    filtered.blit_from_bytes(0, decompressed, row_offset + 1, stride)
     let filtered_bytes = Bytes::from_array(filtered)
     let reconstructed = reconstruct_row(
       filter_type, filtered_bytes, prev_row, bpp,
@@ -175,9 +167,7 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
       palette,
     )
     let dst_offset = y * ihdr.width * 4
-    for i in 0..<(ihdr.width * 4) {
-      rgba_buf[dst_offset + i] = rgba_row[i]
-    }
+    rgba_buf.blit_from_bytes(dst_offset, rgba_row, 0, ihdr.width * 4)
     prev_row = reconstructed
   }
   { width: ihdr.width, height: ihdr.height, data: Bytes::from_array(rgba_buf) }

@@ -9,8 +9,8 @@ fn scanline_to_rgba(
 ) -> Bytes raise DecodeError {
   match (color_type, bit_depth) {
     (Rgba, 8) =>
-      // Already RGBA8
-      Bytes::from_array(FixedArray::makei(row.length(), fn(i) { row[i] }))
+      // Already RGBA8 — return as-is (zero-copy)
+      row
     (Rgb, 8) => {
       let pixel_count = row.length() / 3
       let buf = FixedArray::make(pixel_count * 4, b'\x00')
