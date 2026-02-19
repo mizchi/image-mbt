@@ -1,24 +1,24 @@
 # TODO (image-mbt)
 
-## P0: PNG first
+## Done
 
-- [ ] PNG decoder (IHDR/PLTE/IDAT/IEND)
-- [ ] PNG encoder (RGBA8 baseline)
-- [ ] zlib/deflate integration point
-- [ ] Color type conversion to RGBA8
-- [ ] Error model and diagnostics
+- [x] PNG decoder (IHDR/PLTE/IDAT/IEND, all color types)
+- [x] PNG encoder (RGBA8, adaptive row filtering)
+- [x] zlib/deflate integration (`mizchi/zlib`)
+- [x] Color type conversion to RGBA8
+- [x] Error model and diagnostics (`DecodeError` / `EncodeError`)
+- [x] Engine-ready `ImageData` contract
+- [x] Golden tests with fixture corpus
+- [x] JPEG baseline decode
+- [x] BMP decode / encode (24-bit uncompressed)
+- [x] Image resize (Nearest / Bilinear / Bicubic)
 
-## P1: Runtime integration
+## Next
 
-- [ ] Engine-ready `ImageData` contract
+- [ ] JPEG encoder
+- [ ] WebP support
 - [ ] Zero-copy decode path for js/wasm where possible
 - [ ] Streaming decode API for large assets
-- [ ] Golden tests with fixture corpus
-
-## P2: Extended formats
-
-- [ ] JPEG decode (minimum baseline)
-- [ ] Optional WebP decode adapter
 - [ ] Metadata handling policy (gamma/sRGB/ICC)
 
 ## Packaging
