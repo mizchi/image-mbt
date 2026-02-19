@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/image-mbt"
+
+// Values
+pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
+
+pub fn decode_png(Bytes) -> ImageData raise DecodeError
+
+pub fn encode_png(ImageData) -> Bytes raise EncodeError
+
+pub fn package_name() -> String
+
+// Errors
+pub(all) suberror DecodeError {
+  InvalidSignature(String)
+  InvalidChunkCrc(String)
+  MissingChunk(String)
+  UnsupportedFeature(String)
+  CorruptData(String)
+}
+pub impl Show for DecodeError
+
+pub(all) suberror EncodeError {
+  InvalidDimensions(String)
+  InvalidData(String)
+}
+pub impl Show for EncodeError
+
+// Types and methods
+pub enum ColorType {
+  Grayscale
+  Rgb
+  Indexed
+  GrayscaleAlpha
+  Rgba
+}
+pub impl Eq for ColorType
+pub impl Show for ColorType
+
+pub(all) struct IhdrData {
+  width : Int
+  height : Int
+  bit_depth : Int
+  color_type : ColorType
+  compression : Int
+  filter : Int
+  interlace : Int
+}
+pub impl Eq for IhdrData
+pub impl Show for IhdrData
+
+pub(all) struct ImageData {
+  width : Int
+  height : Int
+  data : Bytes
+}
+pub impl Eq for ImageData
+pub impl Show for ImageData
+
+// Type aliases
+
+// Traits
+
