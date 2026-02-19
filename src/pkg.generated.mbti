@@ -4,9 +4,15 @@ package "mizchi/image"
 // Values
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
+pub fn decode_bmp_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> (Int, Int) raise DecodeError
+
+pub fn decode_image_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
+
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
+
+pub fn decode_png_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> IhdrData raise DecodeError
 
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 
@@ -65,6 +71,13 @@ pub(all) struct ImageData {
 pub impl Eq for ImageData
 pub impl Show for ImageData
 
+pub(all) enum ImageFormat {
+  Png
+  Bmp
+}
+pub impl Eq for ImageFormat
+pub impl Show for ImageFormat
+
 pub(all) enum ResizeMethod {
   Nearest
   Bilinear
@@ -72,6 +85,14 @@ pub(all) enum ResizeMethod {
 }
 pub impl Eq for ResizeMethod
 pub impl Show for ResizeMethod
+
+pub(all) struct StreamImageInfo {
+  format : ImageFormat
+  width : Int
+  height : Int
+}
+pub impl Eq for StreamImageInfo
+pub impl Show for StreamImageInfo
 
 // Type aliases
 

@@ -60,6 +60,9 @@ priv struct PngChunk {
 
 ///|
 fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
+  if raw.length() < 8 {
+    raise InvalidSignature("not a PNG file")
+  }
   // Verify signature
   for i in 0..<8 {
     if raw[i] != png_signature[i] {
@@ -101,14 +104,20 @@ fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
 }
 
 ///|
-pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
-  let chunks = parse_chunks(raw)
-  // Find IHDR
-  let ihdr = match chunks[0] {
+fn parse_png_ihdr(chunks : Array[PngChunk]) -> IhdrData raise DecodeError {
+  if chunks.is_empty() {
+    raise MissingChunk("IHDR")
+  }
+  match chunks[0] {
     { chunk_type: "IHDR", data } => parse_ihdr(data)
     _ => raise MissingChunk("IHDR must be first chunk")
   }
-  // Collect IDAT data
+}
+
+///|
+fn collect_png_image_data(
+  chunks : Array[PngChunk],
+) -> (Array[Bytes], Bytes?) raise DecodeError {
   let idat_parts : Array[Bytes] = []
   let mut palette : Bytes? = None
   for chunk in chunks {
@@ -121,6 +130,16 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
   if idat_parts.is_empty() {
     raise MissingChunk("IDAT")
   }
+  (idat_parts, palette)
+}
+
+///|
+fn decode_png_scanlines(
+  ihdr : IhdrData,
+  idat_parts : Array[Bytes],
+  palette : Bytes?,
+  on_row : (Int, Bytes) -> Unit,
+) -> Unit raise DecodeError {
   // Concatenate IDAT data
   let total_idat_len = idat_parts.fold(init=0, fn(acc, b) { acc + b.length() })
   let idat_buf = FixedArray::make(total_idat_len, b'\x00')
@@ -148,7 +167,6 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
   }
   // Process each scanline
   let mut prev_row = Bytes::new(stride)
-  let rgba_buf = FixedArray::make(ihdr.width * ihdr.height * 4, b'\x00')
   for y in 0..<ihdr.height {
     let row_offset = y * (1 + stride)
     let filter_type = decompressed[row_offset].to_int()
@@ -166,10 +184,33 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
       ihdr.bit_depth,
       palette,
     )
-    let dst_offset = y * ihdr.width * 4
-    rgba_buf.blit_from_bytes(dst_offset, rgba_row, 0, ihdr.width * 4)
+    on_row(y, rgba_row)
     prev_row = reconstructed
   }
+}
+
+///|
+pub fn decode_png_stream(
+  raw : Bytes,
+  on_row~ : (Int, Bytes) -> Unit,
+) -> IhdrData raise DecodeError {
+  let chunks = parse_chunks(raw)
+  let ihdr = parse_png_ihdr(chunks)
+  let (idat_parts, palette) = collect_png_image_data(chunks)
+  decode_png_scanlines(ihdr, idat_parts, palette, on_row)
+  ihdr
+}
+
+///|
+pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
+  let chunks = parse_chunks(raw)
+  let ihdr = parse_png_ihdr(chunks)
+  let (idat_parts, palette) = collect_png_image_data(chunks)
+  let rgba_buf = FixedArray::make(ihdr.width * ihdr.height * 4, b'\x00')
+  decode_png_scanlines(ihdr, idat_parts, palette, fn(y, row) {
+    let dst_offset = y * ihdr.width * 4
+    rgba_buf.blit_from_bytes(dst_offset, row, 0, ihdr.width * 4)
+  })
   { width: ihdr.width, height: ihdr.height, data: Bytes::from_array(rgba_buf) }
 }
 

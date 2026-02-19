@@ -33,6 +33,19 @@ pub(all) struct IhdrData {
 } derive(Eq, Show)
 
 ///|
+pub(all) enum ImageFormat {
+  Png
+  Bmp
+} derive(Eq, Show)
+
+///|
+pub(all) struct StreamImageInfo {
+  format : ImageFormat
+  width : Int
+  height : Int
+} derive(Eq, Show)
+
+///|
 pub(all) suberror DecodeError {
   InvalidSignature(String)
   InvalidChunkCrc(String)

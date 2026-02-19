@@ -24,7 +24,18 @@ fn read_u16le(data : Bytes, offset : Int) -> Int {
 }
 
 ///|
-pub fn decode_bmp(raw : Bytes) -> ImageData raise DecodeError {
+priv struct BmpDecodeInfo {
+  width : Int
+  height : Int
+  bpp : Int
+  bytes_per_px : Int
+  pixel_offset : Int
+  padded_row_size : Int
+  top_down : Bool
+}
+
+///|
+fn parse_bmp_info(raw : Bytes) -> BmpDecodeInfo raise DecodeError {
   if raw.length() < 54 {
     raise CorruptData("BMP file too short")
   }
@@ -66,22 +77,53 @@ pub fn decode_bmp(raw : Bytes) -> ImageData raise DecodeError {
   if raw.length() < required_size {
     raise CorruptData("BMP file too short for pixel data")
   }
-  let rgba_buf = FixedArray::make(width * height * 4, b'\x00')
-  for y in 0..<height {
-    let src_y = if top_down { y } else { height - 1 - y }
-    let src_row_offset = pixel_offset + src_y * padded_row_size
-    for x in 0..<width {
-      let dst_idx = (y * width + x) * 4
-      let src_idx = src_row_offset + x * bytes_per_px
+
+  { width, height, bpp, bytes_per_px, pixel_offset, padded_row_size, top_down }
+}
+
+///|
+fn decode_bmp_rows(
+  raw : Bytes,
+  info : BmpDecodeInfo,
+  on_row : (Int, Bytes) -> Unit,
+) -> Unit {
+  for y in 0..<info.height {
+    let src_y = if info.top_down { y } else { info.height - 1 - y }
+    let src_row_offset = info.pixel_offset + src_y * info.padded_row_size
+    let row_buf = FixedArray::make(info.width * 4, b'\x00')
+    for x in 0..<info.width {
+      let src_idx = src_row_offset + x * info.bytes_per_px
+      let dst_idx = x * 4
       let b_val = raw[src_idx]
       let g_val = raw[src_idx + 1]
       let r_val = raw[src_idx + 2]
-      let a_val : Byte = if bpp == 32 { raw[src_idx + 3] } else { b'\xFF' }
-      rgba_buf[dst_idx] = r_val
-      rgba_buf[dst_idx + 1] = g_val
-      rgba_buf[dst_idx + 2] = b_val
-      rgba_buf[dst_idx + 3] = a_val
+      let a_val : Byte = if info.bpp == 32 { raw[src_idx + 3] } else { b'\xFF' }
+      row_buf[dst_idx] = r_val
+      row_buf[dst_idx + 1] = g_val
+      row_buf[dst_idx + 2] = b_val
+      row_buf[dst_idx + 3] = a_val
     }
+    on_row(y, Bytes::from_array(row_buf))
   }
-  { width, height, data: Bytes::from_array(rgba_buf) }
+}
+
+///|
+pub fn decode_bmp_stream(
+  raw : Bytes,
+  on_row~ : (Int, Bytes) -> Unit,
+) -> (Int, Int) raise DecodeError {
+  let info = parse_bmp_info(raw)
+  decode_bmp_rows(raw, info, on_row)
+  (info.width, info.height)
+}
+
+///|
+pub fn decode_bmp(raw : Bytes) -> ImageData raise DecodeError {
+  let info = parse_bmp_info(raw)
+  let rgba_buf = FixedArray::make(info.width * info.height * 4, b'\x00')
+  decode_bmp_rows(raw, info, fn(y, row) {
+    let dst_offset = y * info.width * 4
+    rgba_buf.blit_from_bytes(dst_offset, row, 0, info.width * 4)
+  })
+  { width: info.width, height: info.height, data: Bytes::from_array(rgba_buf) }
 }
