@@ -10,6 +10,8 @@ pub fn decode_png(Bytes) -> ImageData raise DecodeError
 
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 
+pub fn encode_jpeg(ImageData, quality? : Int) -> Bytes raise EncodeError
+
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
 
 pub fn package_name() -> String

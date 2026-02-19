@@ -15,7 +15,7 @@
 
 ## Next
 
-- [ ] JPEG encoder
+- [x] JPEG encoder
 - [ ] WebP support
 - [ ] Zero-copy decode path for js/wasm where possible
 - [ ] Streaming decode API for large assets

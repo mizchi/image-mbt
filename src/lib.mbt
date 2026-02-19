@@ -5,4 +5,3 @@ pub fn package_name() -> String {
 }
 
 // TODO: WebP support
-// TODO: JPEG encoder (PNG -> JPEG conversion)

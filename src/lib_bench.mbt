@@ -54,6 +54,12 @@ test "bench: PNG encode 64x64" (b : @bench.T) {
 }
 
 ///|
+test "bench: JPEG encode 64x64" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(encode_jpeg(img)) catch { _ => () } })
+}
+
+///|
 test "bench: PNG roundtrip 64x64" (b : @bench.T) {
   let img = make_bench_image()
   b.bench(fn() {
