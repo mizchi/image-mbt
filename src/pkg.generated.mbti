@@ -22,6 +22,8 @@ pub fn encode_jpeg(ImageData, quality? : Int) -> Bytes raise EncodeError
 
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
 
+pub fn encode_webp(ImageData) -> Bytes raise EncodeError
+
 pub fn package_name() -> String
 
 pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError

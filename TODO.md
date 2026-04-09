@@ -17,7 +17,8 @@
 ## Next
 
 - [x] JPEG encoder
-- [ ] WebP support
+- [ ] WebP decode
+- [ ] WebP encoder optimization (transforms/LZ77/color cache)
 - [ ] Zero-copy decode path for js/wasm where possible
 - [ ] Streaming decode API for large assets
 - [ ] Metadata handling policy (gamma/sRGB/ICC)
