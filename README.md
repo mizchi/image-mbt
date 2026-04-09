@@ -5,10 +5,10 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 ## Features
 
 - **PNG** decode / encode (RGBA8, adaptive row filtering)
-- **BMP** decode / encode (24-bit uncompressed)
+- **BMP** decode / encode
 - **JPEG** baseline decode / encode
 - **GIF** encode (single-frame, indexed palette, binary transparency)
-- **WebP** lossless encode (still image, MVP)
+- **WebP** lossless encode (still image)
 - **ICO** encode (single-image, PNG payload)
 - **AVIF** encode (js target MVP, opaque still image)
 - **Resize** with Nearest / Bilinear / Bicubic interpolation
@@ -79,10 +79,18 @@ pub(all) struct ImageData { width : Int; height : Int; data : Bytes }
 pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 ```
 
-## Targets
+## Support
 
-`PNG` / `BMP` / `JPEG` / `GIF` / `WebP` / `ICO` / `resize` work on `js`, `native`, and `wasm-gc`.
-`AVIF` is currently a `js`-target MVP only, and rejects non-opaque pixels.
+| Feature | Decode | Encode | Targets | Notes |
+|---|---|---|---|---|
+| PNG | yes | yes | `js` / `native` / `wasm-gc` | RGBA8 normalize, stream decode |
+| BMP | yes | yes | `js` / `native` / `wasm-gc` | decode: 24/32-bit, encode: 32-bit BGRA |
+| JPEG | yes | yes | `js` / `native` / `wasm-gc` | baseline only |
+| GIF | no | yes | `js` / `native` / `wasm-gc` | single-frame, `<=256` colors, alpha `0/255` only |
+| WebP | no | yes | `js` / `native` / `wasm-gc` | lossless still-image encoder |
+| ICO | no | yes | `js` / `native` / `wasm-gc` | single PNG payload, `<=256x256` |
+| AVIF | no | yes | `js` | opaque images only, requires browser AVIF canvas support or local `ffmpeg` |
+| Resize | n/a | n/a | `js` / `native` / `wasm-gc` | Nearest / Bilinear / Bicubic |
 
 ## License
 

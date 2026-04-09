@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Add ICO encoder (single-image, PNG payload)
 - Add AVIF encoder js-target MVP
