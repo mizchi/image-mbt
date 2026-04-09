@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add ICO encoder (single-image, PNG payload)
+- Add AVIF encoder js-target MVP
+- Document AVIF target/runtime constraints
+
 ## 0.2.0
 
 - Add GIF encoder

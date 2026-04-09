@@ -1,6 +1,6 @@
 # mizchi/image
 
-Image codec primitives for MoonBit (no external dependencies except `mizchi/zlib`).
+Image codec primitives for MoonBit. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
 
 ## Features
 
@@ -9,6 +9,8 @@ Image codec primitives for MoonBit (no external dependencies except `mizchi/zlib
 - **JPEG** baseline decode / encode
 - **GIF** encode (single-frame, indexed palette, binary transparency)
 - **WebP** lossless encode (still image, MVP)
+- **ICO** encode (single-image, PNG payload)
+- **AVIF** encode (js target MVP, opaque still image)
 - **Resize** with Nearest / Bilinear / Bicubic interpolation
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
@@ -36,6 +38,12 @@ let gif = @image.encode_gif(resized)
 // WebP lossless encode
 let webp = @image.encode_webp(resized)
 
+// ICO encode (single PNG-backed icon, <= 256x256)
+let ico = @image.encode_ico(resized)
+
+// AVIF encode (js target MVP, opaque images only)
+let avif = @image.encode_avif(resized)
+
 // Stream decode (PNG/BMP auto detect)
 let rows : Array[Bytes] = []
 let info = @image.decode_image_stream(
@@ -59,6 +67,8 @@ pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 pub fn encode_jpeg(ImageData, quality? : Int = 85) -> Bytes raise EncodeError
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
+pub fn encode_ico(ImageData) -> Bytes raise EncodeError
+pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 ```
 
@@ -71,7 +81,8 @@ pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 
 ## Targets
 
-Works on `js`, `native`, and `wasm-gc` backends.
+`PNG` / `BMP` / `JPEG` / `GIF` / `WebP` / `ICO` / `resize` work on `js`, `native`, and `wasm-gc`.
+`AVIF` is currently a `js`-target MVP only, and rejects non-opaque pixels.
 
 ## License
 

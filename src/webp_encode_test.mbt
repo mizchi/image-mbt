@@ -1,24 +1,6 @@
 ///|
 let webp_test_code_length_code_order : FixedArray[Int] = [
-  17,
-  18,
-  0,
-  1,
-  2,
-  3,
-  4,
-  5,
-  16,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14,
-  15,
+  17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ]
 
 ///|
@@ -47,7 +29,7 @@ fn webp_pack_argb_for_test(r : Int, g : Int, b : Int, a : Int) -> Int {
 
 ///|
 fn webp_color_cache_index_for_test(color : Int, bits : Int) -> Int {
-  let hash = ((color * 0x1E35A7BD) >> (32 - bits))
+  let hash = (color * 0x1E35A7BD) >> (32 - bits)
   hash & ((1 << bits) - 1)
 }
 
@@ -249,11 +231,9 @@ fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
   let color_cache_bits = if br.read_bits(1) == 1 { br.read_bits(4) } else { 0 }
   assert_eq(br.read_bits(1), 0) // single prefix group
 
-  let green_alphabet_size = 256 + 24 + (if color_cache_bits > 0 {
-    1 << color_cache_bits
-  } else {
-    0
-  })
+  let green_alphabet_size = 256 +
+    24 +
+    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 })
   let green_prefix = decode_prefix_code_for_webp_test(br, green_alphabet_size)
   let red_prefix = decode_prefix_code_for_webp_test(br, 256)
   let blue_prefix = decode_prefix_code_for_webp_test(br, 256)
@@ -262,11 +242,19 @@ fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
 
   let rgba = FixedArray::make(width * height * 4, b'\x00')
   let color_cache = FixedArray::make(
-    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 }),
+    if color_cache_bits > 0 {
+      1 << color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   let color_cache_valid = FixedArray::make(
-    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 }),
+    if color_cache_bits > 0 {
+      1 << color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   for i in 0..<(width * height) {
@@ -311,7 +299,11 @@ fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
   if chunk_size % 2 == 1 {
     assert_eq(data[payload_end].to_int(), 0)
   }
-  ({ width, height, data: Bytes::from_array(rgba) }, subtract_green, color_cache_bits)
+  (
+    { width, height, data: Bytes::from_array(rgba) },
+    subtract_green,
+    color_cache_bits,
+  )
 }
 
 ///|
@@ -364,7 +356,7 @@ fn make_webp_color_cache_test_image() -> ImageData {
   for y in 0..<height {
     for x in 0..<width {
       let offset = (y * width + x) * 4
-      let tile = (x % 2) + (y % 2) * 2
+      let tile = x % 2 + y % 2 * 2
       match tile {
         0 => {
           buf[offset] = b'\x10'

@@ -1,24 +1,6 @@
 ///|
 let webp_code_length_code_order : FixedArray[Int] = [
-  17,
-  18,
-  0,
-  1,
-  2,
-  3,
-  4,
-  5,
-  16,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14,
-  15,
+  17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ]
 
 ///|
@@ -59,7 +41,8 @@ fn WebPBitWriter::put_bits(
   if count <= 0 {
     return
   }
-  self.bit_buf = self.bit_buf | ((value & ((1 << count) - 1)) << self.bits_count)
+  self.bit_buf = self.bit_buf |
+    ((value & ((1 << count) - 1)) << self.bits_count)
   self.bits_count += count
   while self.bits_count >= 8 {
     self.buf.push((self.bit_buf & 0xFF).to_byte())
@@ -97,6 +80,7 @@ fn webp_reverse_bits(value : Int, count : Int) -> Int {
   out
 }
 
+///|
 fn webp_floor_log2(value : Int) -> Int {
   let mut v = value
   let mut out = -1
@@ -114,7 +98,7 @@ fn webp_pack_argb(r : Int, g : Int, b : Int, a : Int) -> Int {
 
 ///|
 fn webp_color_cache_index(color : Int, bits : Int) -> Int {
-  let hash = ((color * 0x1E35A7BD) >> (32 - bits))
+  let hash = (color * 0x1E35A7BD) >> (32 - bits)
   hash & ((1 << bits) - 1)
 }
 
@@ -318,10 +302,7 @@ fn encode_webp_normal_prefix_code(
 }
 
 ///|
-fn encode_webp_prefix_code(
-  bw : WebPBitWriter,
-  prefix : WebPPrefixCode,
-) -> Unit {
+fn encode_webp_prefix_code(bw : WebPBitWriter, prefix : WebPPrefixCode) -> Unit {
   let used = webp_prefix_used_symbols(prefix)
   if used.length() <= 2 {
     encode_webp_simple_prefix_code(bw, prefix)
@@ -355,12 +336,7 @@ fn webp_collect_channel_freqs(
   img : ImageData,
   subtract_green : Bool,
   color_cache_bits : Int,
-) -> (
-  FixedArray[Int],
-  FixedArray[Int],
-  FixedArray[Int],
-  FixedArray[Int],
-) {
+) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
   let green_alphabet_size = if color_cache_bits > 0 {
     256 + 24 + (1 << color_cache_bits)
   } else {
@@ -371,11 +347,19 @@ fn webp_collect_channel_freqs(
   let blue_freqs = FixedArray::make(256, 0)
   let alpha_freqs = FixedArray::make(256, 0)
   let color_cache = FixedArray::make(
-    if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 },
+    if color_cache_bits > 0 {
+      1 << color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   let color_cache_valid = FixedArray::make(
-    if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 },
+    if color_cache_bits > 0 {
+      1 << color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   let pixel_count = img.width * img.height
@@ -419,9 +403,7 @@ fn webp_build_plan_candidate(
   color_cache_bits : Int,
 ) -> (WebPEncodingPlan, Int) {
   let (green_freqs, red_freqs, blue_freqs, alpha_freqs) = webp_collect_channel_freqs(
-    img,
-    subtract_green,
-    color_cache_bits,
+    img, subtract_green, color_cache_bits,
   )
   let green_code = webp_build_prefix_code(green_freqs)
   let red_code = webp_build_prefix_code(red_freqs)
@@ -451,11 +433,9 @@ fn webp_build_plan(img : ImageData) -> WebPEncodingPlan {
   let mut best_score = initial.1
   for subtract_green_index in 0..<2 {
     let subtract_green = subtract_green_index == 1
-    for color_cache_bits in 0..=4 {
+    for color_cache_bits in 0..<=4 {
       let candidate = webp_build_plan_candidate(
-        img,
-        subtract_green,
-        color_cache_bits,
+        img, subtract_green, color_cache_bits,
       )
       if candidate.1 < best_score {
         best_plan = candidate.0
@@ -472,11 +452,19 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
   let pixel_count = img.width * img.height
   let plan = webp_build_plan(img)
   let color_cache = FixedArray::make(
-    if plan.color_cache_bits > 0 { 1 << plan.color_cache_bits } else { 0 },
+    if plan.color_cache_bits > 0 {
+      1 << plan.color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   let color_cache_valid = FixedArray::make(
-    if plan.color_cache_bits > 0 { 1 << plan.color_cache_bits } else { 0 },
+    if plan.color_cache_bits > 0 {
+      1 << plan.color_cache_bits
+    } else {
+      0
+    },
     0,
   )
   let mut alpha_is_used = false
@@ -518,7 +506,11 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
     let blue = img.data[offset + 2].to_int() & 0xFF
     let alpha = img.data[offset + 3].to_int() & 0xFF
     let enc_red = if plan.subtract_green { (red - green) & 0xFF } else { red }
-    let enc_blue = if plan.subtract_green { (blue - green) & 0xFF } else { blue }
+    let enc_blue = if plan.subtract_green {
+      (blue - green) & 0xFF
+    } else {
+      blue
+    }
     let color = webp_pack_argb(enc_red, green, enc_blue, alpha)
     if plan.color_cache_bits > 0 {
       let cache_idx = webp_color_cache_index(color, plan.color_cache_bits)
@@ -534,7 +526,11 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
       color_cache_valid[cache_idx] = 1
     } else {
       let enc_red = if plan.subtract_green { (red - green) & 0xFF } else { red }
-      let enc_blue = if plan.subtract_green { (blue - green) & 0xFF } else { blue }
+      let enc_blue = if plan.subtract_green {
+        (blue - green) & 0xFF
+      } else {
+        blue
+      }
       webp_write_symbol(bw, plan.green_code, green)
       webp_write_symbol(bw, plan.red_code, enc_red)
       webp_write_symbol(bw, plan.blue_code, enc_blue)

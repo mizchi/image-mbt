@@ -49,7 +49,7 @@ fn make_webp_cache_bench_image() -> ImageData {
   for y in 0..<height {
     for x in 0..<width {
       let idx = (y * width + x) * 4
-      let tile = (x % 2) + (y % 2) * 2
+      let tile = x % 2 + y % 2 * 2
       match tile {
         0 => {
           buf[idx] = b'\x10'
