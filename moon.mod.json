@@ -1,6 +1,6 @@
 {
   "name": "mizchi/image",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "deps": {
     "mizchi/zlib": "0.4.4"
   },

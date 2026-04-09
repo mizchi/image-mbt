@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Preserve `tRNS` alpha for indexed PNG decode
+- Bump `mizchi/zlib` to `0.4.4`
+
 ## 0.3.0
 
 - Add ICO encoder (single-image, PNG payload)
