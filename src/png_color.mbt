@@ -6,6 +6,7 @@ fn scanline_to_rgba(
   color_type : ColorType,
   bit_depth : Int,
   palette : Bytes?,
+  palette_alpha : Bytes?,
 ) -> Bytes raise DecodeError {
   match (color_type, bit_depth) {
     (Rgba, 8) =>
@@ -64,7 +65,10 @@ fn scanline_to_rgba(
             buf[i * 4] = plte[idx * 3]
             buf[i * 4 + 1] = plte[idx * 3 + 1]
             buf[i * 4 + 2] = plte[idx * 3 + 2]
-            buf[i * 4 + 3] = b'\xFF'
+            buf[i * 4 + 3] = match palette_alpha {
+              Some(trns) if idx < trns.length() => trns[idx]
+              _ => b'\xFF'
+            }
           }
           Bytes::from_array(buf)
         }
@@ -82,28 +86,28 @@ fn scanline_to_rgba(
 ///|
 test "scanline_to_rgba: rgba passthrough" {
   let row = b"\xFF\x00\x80\xC0"
-  let result = scanline_to_rgba(row, Rgba, 8, None)
+  let result = scanline_to_rgba(row, Rgba, 8, None, None)
   assert_eq(result, b"\xFF\x00\x80\xC0")
 }
 
 ///|
 test "scanline_to_rgba: rgb to rgba" {
   let row = b"\xFF\x00\x80"
-  let result = scanline_to_rgba(row, Rgb, 8, None)
+  let result = scanline_to_rgba(row, Rgb, 8, None, None)
   assert_eq(result, b"\xFF\x00\x80\xFF")
 }
 
 ///|
 test "scanline_to_rgba: grayscale to rgba" {
   let row = b"\x80\xFF"
-  let result = scanline_to_rgba(row, Grayscale, 8, None)
+  let result = scanline_to_rgba(row, Grayscale, 8, None, None)
   assert_eq(result, b"\x80\x80\x80\xFF\xFF\xFF\xFF\xFF")
 }
 
 ///|
 test "scanline_to_rgba: grayscale alpha to rgba" {
   let row = b"\x80\xC0"
-  let result = scanline_to_rgba(row, GrayscaleAlpha, 8, None)
+  let result = scanline_to_rgba(row, GrayscaleAlpha, 8, None, None)
   assert_eq(result, b"\x80\x80\x80\xC0")
 }
 
@@ -112,6 +116,21 @@ test "scanline_to_rgba: indexed to rgba" {
   // Palette: entry 0 = red, entry 1 = green
   let palette = b"\xFF\x00\x00\x00\xFF\x00"
   let row = b"\x00\x01"
-  let result = scanline_to_rgba(row, Indexed, 8, Some(palette))
+  let result = scanline_to_rgba(row, Indexed, 8, Some(palette), None)
   assert_eq(result, b"\xFF\x00\x00\xFF\x00\xFF\x00\xFF")
+}
+
+///|
+test "scanline_to_rgba: indexed applies palette alpha" {
+  let palette = b"\xFF\x00\x00\x00\xFF\x00"
+  let palette_alpha = b"\x00\x80"
+  let row = b"\x00\x01"
+  let result = scanline_to_rgba(
+    row,
+    Indexed,
+    8,
+    Some(palette),
+    Some(palette_alpha),
+  )
+  assert_eq(result, b"\xFF\x00\x00\x00\x00\xFF\x00\x80")
 }

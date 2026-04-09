@@ -117,20 +117,22 @@ fn parse_png_ihdr(chunks : Array[PngChunk]) -> IhdrData raise DecodeError {
 ///|
 fn collect_png_image_data(
   chunks : Array[PngChunk],
-) -> (Array[Bytes], Bytes?) raise DecodeError {
+) -> (Array[Bytes], Bytes?, Bytes?) raise DecodeError {
   let idat_parts : Array[Bytes] = []
   let mut palette : Bytes? = None
+  let mut palette_alpha : Bytes? = None
   for chunk in chunks {
     match chunk.chunk_type {
       "IDAT" => idat_parts.push(chunk.data)
       "PLTE" => palette = Some(chunk.data)
+      "tRNS" => palette_alpha = Some(chunk.data)
       _ => ()
     }
   }
   if idat_parts.is_empty() {
     raise MissingChunk("IDAT")
   }
-  (idat_parts, palette)
+  (idat_parts, palette, palette_alpha)
 }
 
 ///|
@@ -138,6 +140,7 @@ fn decode_png_scanlines(
   ihdr : IhdrData,
   idat_parts : Array[Bytes],
   palette : Bytes?,
+  palette_alpha : Bytes?,
   on_row : (Int, Bytes) -> Unit,
 ) -> Unit raise DecodeError {
   // Concatenate IDAT data
@@ -183,6 +186,7 @@ fn decode_png_scanlines(
       ihdr.color_type,
       ihdr.bit_depth,
       palette,
+      palette_alpha,
     )
     on_row(y, rgba_row)
     prev_row = reconstructed
@@ -196,8 +200,8 @@ pub fn decode_png_stream(
 ) -> IhdrData raise DecodeError {
   let chunks = parse_chunks(raw)
   let ihdr = parse_png_ihdr(chunks)
-  let (idat_parts, palette) = collect_png_image_data(chunks)
-  decode_png_scanlines(ihdr, idat_parts, palette, on_row)
+  let (idat_parts, palette, palette_alpha) = collect_png_image_data(chunks)
+  decode_png_scanlines(ihdr, idat_parts, palette, palette_alpha, on_row)
   ihdr
 }
 
@@ -205,9 +209,9 @@ pub fn decode_png_stream(
 pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
   let chunks = parse_chunks(raw)
   let ihdr = parse_png_ihdr(chunks)
-  let (idat_parts, palette) = collect_png_image_data(chunks)
+  let (idat_parts, palette, palette_alpha) = collect_png_image_data(chunks)
   let rgba_buf = FixedArray::make(ihdr.width * ihdr.height * 4, b'\x00')
-  decode_png_scanlines(ihdr, idat_parts, palette, fn(y, row) {
+  decode_png_scanlines(ihdr, idat_parts, palette, palette_alpha, fn(y, row) {
     let dst_offset = y * ihdr.width * 4
     rgba_buf.blit_from_bytes(dst_offset, row, 0, ihdr.width * 4)
   })

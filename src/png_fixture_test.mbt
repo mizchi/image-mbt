@@ -86,6 +86,30 @@ test "fixture: decode Indexed 2x2 (manual)" {
 }
 
 ///|
+test "fixture: decode Indexed 2x2 with tRNS alpha" {
+  let ihdr_data = b"\x00\x00\x00\x02\x00\x00\x00\x02\x08\x03\x00\x00\x00"
+  let ihdr_chunk = make_chunk(b"\x49\x48\x44\x52", ihdr_data)
+  let plte_chunk = make_chunk(
+    b"\x50\x4C\x54\x45", b"\xFF\x00\x00\x00\xFF\x00\x00\x00\xFF\xFF\xFF\x00",
+  )
+  let trns_chunk = make_chunk(b"\x74\x52\x4E\x53", b"\x00\x40\x80\xFF")
+  let raw = b"\x00\x00\x01\x00\x02\x03"
+  let idat_chunk = make_chunk(b"\x49\x44\x41\x54", @zlib.zlib_compress(raw))
+  let iend_chunk = make_chunk(b"\x49\x45\x4E\x44", b"")
+  let png = concat_bytes([
+    b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", ihdr_chunk, plte_chunk, trns_chunk, idat_chunk,
+    iend_chunk,
+  ])
+  let img = decode_png(png)
+  assert_eq(img.width, 2)
+  assert_eq(img.height, 2)
+  assert_pixel(img, 0, 0, 255, 0, 0, 0)
+  assert_pixel(img, 1, 0, 0, 255, 0, 64)
+  assert_pixel(img, 0, 1, 0, 0, 255, 128)
+  assert_pixel(img, 1, 1, 255, 255, 0, 255)
+}
+
+///|
 // Pillow-generated RGBA 4x4 gradient (exercises PNG filters)
 test "fixture: decode RGBA 4x4 gradient (Pillow)" {
   let png = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\x48\x44\x52\x00\x00\x00\x04\x00\x00\x00\x04\x08\x06\x00\x00\x00\xA9\xF1\x9E\x7E\x00\x00\x00\x1D\x49\x44\x41\x54\x78\x9C\x63\x64\x60\x60\xF8\x1F\xCA\xA0\xC5\x00\xC3\x2C\x0C\xA1\x5A\x0C\x0C\x0C\x08\x4C\x58\x00\x00\xE9\xCB\x05\x81\x67\xE0\xB8\xB9\x00\x00\x00\x00\x49\x45\x4E\x44\xAE\x42\x60\x82"
