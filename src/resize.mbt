@@ -70,11 +70,7 @@ fn resize_nearest(
     let sy = clamp_int((dy * 2 + 1) * src_h / (new_height * 2), 0, src_h - 1)
     let src_row = sy * src_w * 4
     for dx in 0..<new_width {
-      let sx = clamp_int(
-        (dx * 2 + 1) * src_w / (new_width * 2),
-        0,
-        src_w - 1,
-      )
+      let sx = clamp_int((dx * 2 + 1) * src_w / (new_width * 2), 0, src_w - 1)
       let si = src_row + sx * 4
       let di = (dy * new_width + dx) * 4
       buf[di] = src[si]
@@ -171,7 +167,13 @@ fn resize_bicubic(
         for i in -1..<=2 {
           let wx = cubic_weight(fx - i.to_double())
           let w = wx * wy
-          let (r, g, b, a) = get_pixel(src, img.width, img.height, ix + i, iy + j)
+          let (r, g, b, a) = get_pixel(
+            src,
+            img.width,
+            img.height,
+            ix + i,
+            iy + j,
+          )
           r_sum += r.to_double() * w
           g_sum += g.to_double() * w
           b_sum += b.to_double() * w
