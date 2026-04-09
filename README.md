@@ -7,6 +7,7 @@ Image codec primitives for MoonBit (no external dependencies except `mizchi/zlib
 - **PNG** decode / encode (RGBA8, adaptive row filtering)
 - **BMP** decode / encode (24-bit uncompressed)
 - **JPEG** baseline decode / encode
+- **GIF** encode (single-frame, indexed palette, binary transparency)
 - **Resize** with Nearest / Bilinear / Bicubic interpolation
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
@@ -27,6 +28,9 @@ let out = @image.encode_png(resized)
 
 // JPEG encode (quality defaults to 85)
 let jpg = @image.encode_jpeg(resized)
+
+// GIF encode (<= 256 colors, alpha 0/255 only)
+let gif = @image.encode_gif(resized)
 
 // Stream decode (PNG/BMP auto detect)
 let rows : Array[Bytes] = []
@@ -49,6 +53,7 @@ pub fn decode_bmp_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> (Int, Int) ra
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 pub fn encode_jpeg(ImageData, quality? : Int = 85) -> Bytes raise EncodeError
+pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 ```
 

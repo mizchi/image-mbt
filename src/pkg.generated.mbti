@@ -16,6 +16,8 @@ pub fn decode_png_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> IhdrData rais
 
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 
+pub fn encode_gif(ImageData) -> Bytes raise EncodeError
+
 pub fn encode_jpeg(ImageData, quality? : Int) -> Bytes raise EncodeError
 
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
@@ -47,8 +49,7 @@ pub enum ColorType {
   Indexed
   GrayscaleAlpha
   Rgba
-}
-pub impl Eq for ColorType
+} derive(Eq)
 pub impl Show for ColorType
 
 pub(all) struct IhdrData {
@@ -59,39 +60,34 @@ pub(all) struct IhdrData {
   compression : Int
   filter : Int
   interlace : Int
-}
-pub impl Eq for IhdrData
+} derive(Eq)
 pub impl Show for IhdrData
 
 pub(all) struct ImageData {
   width : Int
   height : Int
   data : Bytes
-}
-pub impl Eq for ImageData
+} derive(Eq)
 pub impl Show for ImageData
 
 pub(all) enum ImageFormat {
   Png
   Bmp
-}
-pub impl Eq for ImageFormat
+} derive(Eq)
 pub impl Show for ImageFormat
 
 pub(all) enum ResizeMethod {
   Nearest
   Bilinear
   Bicubic
-}
-pub impl Eq for ResizeMethod
+} derive(Eq)
 pub impl Show for ResizeMethod
 
 pub(all) struct StreamImageInfo {
   format : ImageFormat
   width : Int
   height : Int
-}
-pub impl Eq for StreamImageInfo
+} derive(Eq)
 pub impl Show for StreamImageInfo
 
 // Type aliases

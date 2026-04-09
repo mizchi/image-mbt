@@ -3,14 +3,14 @@ pub(all) enum ResizeMethod {
   Nearest
   Bilinear
   Bicubic
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 pub(all) struct ImageData {
   width : Int
   height : Int
   data : Bytes
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 pub enum ColorType {
@@ -19,7 +19,7 @@ pub enum ColorType {
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 pub(all) struct IhdrData {
@@ -30,20 +30,95 @@ pub(all) struct IhdrData {
   compression : Int
   filter : Int
   interlace : Int
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 pub(all) enum ImageFormat {
   Png
   Bmp
-} derive(Eq, Show)
+} derive(Eq)
 
 ///|
 pub(all) struct StreamImageInfo {
   format : ImageFormat
   width : Int
   height : Int
-} derive(Eq, Show)
+} derive(Eq)
+
+///|
+pub impl Show for ResizeMethod with output(self, logger) {
+  match self {
+    Nearest => logger.write_string("Nearest")
+    Bilinear => logger.write_string("Bilinear")
+    Bicubic => logger.write_string("Bicubic")
+  }
+}
+
+///|
+pub impl Show for ImageData with output(self, logger) {
+  logger.write_string(
+    "ImageData{width: " +
+    self.width.to_string() +
+    ", height: " +
+    self.height.to_string() +
+    ", data: " +
+    self.data.to_string() +
+    "}",
+  )
+}
+
+///|
+pub impl Show for ColorType with output(self, logger) {
+  match self {
+    Grayscale => logger.write_string("Grayscale")
+    Rgb => logger.write_string("Rgb")
+    Indexed => logger.write_string("Indexed")
+    GrayscaleAlpha => logger.write_string("GrayscaleAlpha")
+    Rgba => logger.write_string("Rgba")
+  }
+}
+
+///|
+pub impl Show for IhdrData with output(self, logger) {
+  logger.write_string(
+    "IhdrData{width: " +
+    self.width.to_string() +
+    ", height: " +
+    self.height.to_string() +
+    ", bit_depth: " +
+    self.bit_depth.to_string() +
+    ", color_type: " +
+    self.color_type.to_string() +
+    ", compression: " +
+    self.compression.to_string() +
+    ", filter: " +
+    self.filter.to_string() +
+    ", interlace: " +
+    self.interlace.to_string() +
+    "}",
+  )
+}
+
+///|
+pub impl Show for ImageFormat with output(self, logger) {
+  match self {
+    Png => logger.write_string("Png")
+    Bmp => logger.write_string("Bmp")
+  }
+}
+
+///|
+pub impl Show for StreamImageInfo with output(self, logger) {
+  logger.write_string(
+    "StreamImageInfo{format: " +
+    self.format.to_string() +
+    ", width: " +
+    self.width.to_string() +
+    ", height: " +
+    self.height.to_string() +
+    "}",
+  )
+}
 
 ///|
 pub(all) suberror DecodeError {

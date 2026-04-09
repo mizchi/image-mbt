@@ -12,6 +12,7 @@
 - [x] JPEG baseline decode
 - [x] BMP decode / encode (24-bit uncompressed)
 - [x] Image resize (Nearest / Bilinear / Bicubic)
+- [x] GIF encoder (single-frame)
 
 ## Next
 
