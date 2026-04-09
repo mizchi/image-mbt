@@ -41,6 +41,17 @@ fn webp_reverse_bits_for_test(value : Int, count : Int) -> Int {
 }
 
 ///|
+fn webp_pack_argb_for_test(r : Int, g : Int, b : Int, a : Int) -> Int {
+  (a << 24) | (r << 16) | (g << 8) | b
+}
+
+///|
+fn webp_color_cache_index_for_test(color : Int, bits : Int) -> Int {
+  let hash = ((color * 0x1E35A7BD) >> (32 - bits))
+  hash & ((1 << bits) - 1)
+}
+
+///|
 priv struct WebPTestPrefixCode {
   lengths : FixedArray[Int]
   codes : FixedArray[Int]
@@ -200,7 +211,7 @@ fn decode_prefix_code_for_webp_test(
 }
 
 ///|
-fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool) raise {
+fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
   assert_true(data.length() >= 21)
   assert_eq(data[0].to_int(), 0x52)
   assert_eq(data[1].to_int(), 0x49)
@@ -235,39 +246,77 @@ fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool) raise {
       _ => panic()
     }
   }
-  assert_eq(br.read_bits(1), 0) // no color cache
+  let color_cache_bits = if br.read_bits(1) == 1 { br.read_bits(4) } else { 0 }
   assert_eq(br.read_bits(1), 0) // single prefix group
 
-  let green_prefix = decode_prefix_code_for_webp_test(br, 256)
+  let green_alphabet_size = 256 + 24 + (if color_cache_bits > 0 {
+    1 << color_cache_bits
+  } else {
+    0
+  })
+  let green_prefix = decode_prefix_code_for_webp_test(br, green_alphabet_size)
   let red_prefix = decode_prefix_code_for_webp_test(br, 256)
   let blue_prefix = decode_prefix_code_for_webp_test(br, 256)
   let alpha_prefix = decode_prefix_code_for_webp_test(br, 256)
   ignore(decode_prefix_code_for_webp_test(br, 40))
 
   let rgba = FixedArray::make(width * height * 4, b'\x00')
+  let color_cache = FixedArray::make(
+    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 }),
+    0,
+  )
+  let color_cache_valid = FixedArray::make(
+    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 }),
+    0,
+  )
   for i in 0..<(width * height) {
-    let green = decode_webp_symbol_for_test(br, green_prefix)
-    let enc_red = decode_webp_symbol_for_test(br, red_prefix)
-    let enc_blue = decode_webp_symbol_for_test(br, blue_prefix)
-    let alpha = decode_webp_symbol_for_test(br, alpha_prefix)
+    let green_or_op = decode_webp_symbol_for_test(br, green_prefix)
+    let offset = i * 4
+    let encoded_pixel = if green_or_op < 256 {
+      let green = green_or_op
+      let enc_red = decode_webp_symbol_for_test(br, red_prefix)
+      let enc_blue = decode_webp_symbol_for_test(br, blue_prefix)
+      let alpha = decode_webp_symbol_for_test(br, alpha_prefix)
+      (enc_red, green, enc_blue, alpha)
+    } else if green_or_op >= 280 && color_cache_bits > 0 {
+      let cache_idx = green_or_op - 280
+      assert_eq(color_cache_valid[cache_idx], 1)
+      let color = color_cache[cache_idx]
+      let alpha = (color >> 24) & 0xFF
+      let red = (color >> 16) & 0xFF
+      let green = (color >> 8) & 0xFF
+      let blue = color & 0xFF
+      (red, green, blue, alpha)
+    } else {
+      panic()
+    }
+    let enc_red = encoded_pixel.0
+    let green = encoded_pixel.1
+    let enc_blue = encoded_pixel.2
+    let alpha = encoded_pixel.3
     let red = if subtract_green { (enc_red + green) & 0xFF } else { enc_red }
     let blue = if subtract_green { (enc_blue + green) & 0xFF } else { enc_blue }
-    let offset = i * 4
     rgba[offset] = red.to_byte()
     rgba[offset + 1] = green.to_byte()
     rgba[offset + 2] = blue.to_byte()
     rgba[offset + 3] = alpha.to_byte()
+    if color_cache_bits > 0 {
+      let color = webp_pack_argb_for_test(enc_red, green, enc_blue, alpha)
+      let cache_idx = webp_color_cache_index_for_test(color, color_cache_bits)
+      color_cache[cache_idx] = color
+      color_cache_valid[cache_idx] = 1
+    }
   }
   assert_true(br.pos <= payload_end)
   if chunk_size % 2 == 1 {
     assert_eq(data[payload_end].to_int(), 0)
   }
-  ({ width, height, data: Bytes::from_array(rgba) }, subtract_green)
+  ({ width, height, data: Bytes::from_array(rgba) }, subtract_green, color_cache_bits)
 }
 
 ///|
 fn decode_webp_for_test(data : Bytes) -> ImageData raise {
-  let (image, _) = decode_webp_for_test_impl(data)
+  let (image, _, _) = decode_webp_for_test_impl(data)
   image
 }
 
@@ -308,6 +357,43 @@ fn make_webp_subtract_green_test_image() -> ImageData {
 }
 
 ///|
+fn make_webp_color_cache_test_image() -> ImageData {
+  let width = 32
+  let height = 32
+  let buf = FixedArray::make(width * height * 4, b'\x00')
+  for y in 0..<height {
+    for x in 0..<width {
+      let offset = (y * width + x) * 4
+      let tile = (x % 2) + (y % 2) * 2
+      match tile {
+        0 => {
+          buf[offset] = b'\x10'
+          buf[offset + 1] = b'\x20'
+          buf[offset + 2] = b'\x30'
+        }
+        1 => {
+          buf[offset] = b'\x90'
+          buf[offset + 1] = b'\x10'
+          buf[offset + 2] = b'\xB0'
+        }
+        2 => {
+          buf[offset] = b'\x12'
+          buf[offset + 1] = b'\x34'
+          buf[offset + 2] = b'\xF0'
+        }
+        _ => {
+          buf[offset] = b'\xBA'
+          buf[offset + 1] = b'\xDA'
+          buf[offset + 2] = b'\x55'
+        }
+      }
+      buf[offset + 3] = b'\xFF'
+    }
+  }
+  { width, height, data: Bytes::from_array(buf) }
+}
+
+///|
 test "webp_encode basic signature" {
   let img : ImageData = { width: 1, height: 1, data: b"\xAA\xBB\xCC\xDD" }
   let webp = encode_webp(img)
@@ -344,8 +430,18 @@ test "webp_encode optimizes solid image size" {
 test "webp_encode uses subtract-green transform when beneficial" {
   let img = make_webp_subtract_green_test_image()
   let webp = encode_webp(img)
-  let (decoded, uses_subtract_green) = decode_webp_for_test_impl(webp)
+  let (decoded, uses_subtract_green, _) = decode_webp_for_test_impl(webp)
   assert_true(uses_subtract_green)
+  assert_eq(decoded, img)
+}
+
+///|
+test "webp_encode uses color cache when beneficial" {
+  let img = make_webp_color_cache_test_image()
+  let webp = encode_webp(img)
+  let (decoded, _, color_cache_bits) = decode_webp_for_test_impl(webp)
+  assert_true(color_cache_bits > 0)
+  assert_true(webp.length() < 512)
   assert_eq(decoded, img)
 }
 

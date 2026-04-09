@@ -42,6 +42,43 @@ fn make_bench_image() -> ImageData {
 }
 
 ///|
+fn make_webp_cache_bench_image() -> ImageData {
+  let width = 64
+  let height = 64
+  let buf = FixedArray::make(width * height * 4, b'\x00')
+  for y in 0..<height {
+    for x in 0..<width {
+      let idx = (y * width + x) * 4
+      let tile = (x % 2) + (y % 2) * 2
+      match tile {
+        0 => {
+          buf[idx] = b'\x10'
+          buf[idx + 1] = b'\x20'
+          buf[idx + 2] = b'\x30'
+        }
+        1 => {
+          buf[idx] = b'\x90'
+          buf[idx + 1] = b'\x10'
+          buf[idx + 2] = b'\xB0'
+        }
+        2 => {
+          buf[idx] = b'\x12'
+          buf[idx + 1] = b'\x34'
+          buf[idx + 2] = b'\xF0'
+        }
+        _ => {
+          buf[idx] = b'\xBA'
+          buf[idx + 1] = b'\xDA'
+          buf[idx + 2] = b'\x55'
+        }
+      }
+      buf[idx + 3] = b'\xFF'
+    }
+  }
+  { width, height, data: Bytes::from_array(buf) }
+}
+
+///|
 test "bench: PNG decode 64x64" (b : @bench.T) {
   let png = make_bench_png()
   b.bench(fn() { b.keep(decode_png(png)) catch { _ => () } })
@@ -57,6 +94,18 @@ test "bench: PNG encode 64x64" (b : @bench.T) {
 test "bench: JPEG encode 64x64" (b : @bench.T) {
   let img = make_bench_image()
   b.bench(fn() { b.keep(encode_jpeg(img)) catch { _ => () } })
+}
+
+///|
+test "bench: WebP encode 64x64" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(encode_webp(img)) catch { _ => () } })
+}
+
+///|
+test "bench: WebP encode cache-friendly 64x64" (b : @bench.T) {
+  let img = make_webp_cache_bench_image()
+  b.bench(fn() { b.keep(encode_webp(img)) catch { _ => () } })
 }
 
 ///|

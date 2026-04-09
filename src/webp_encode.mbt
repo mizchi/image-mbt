@@ -38,6 +38,7 @@ priv struct WebPPrefixCode {
 ///|
 priv struct WebPEncodingPlan {
   subtract_green : Bool
+  color_cache_bits : Int
   green_code : WebPPrefixCode
   red_code : WebPPrefixCode
   blue_code : WebPPrefixCode
@@ -104,6 +105,17 @@ fn webp_floor_log2(value : Int) -> Int {
     out += 1
   }
   out
+}
+
+///|
+fn webp_pack_argb(r : Int, g : Int, b : Int, a : Int) -> Int {
+  (a << 24) | (r << 16) | (g << 8) | b
+}
+
+///|
+fn webp_color_cache_index(color : Int, bits : Int) -> Int {
+  let hash = ((color * 0x1E35A7BD) >> (32 - bits))
+  hash & ((1 << bits) - 1)
 }
 
 ///|
@@ -221,8 +233,16 @@ fn webp_choose_length_nbits(max_symbol : Int) -> Int {
     4
   } else if max_symbol <= 65 {
     6
-  } else {
+  } else if max_symbol <= 257 {
     8
+  } else if max_symbol <= 1025 {
+    10
+  } else if max_symbol <= 4097 {
+    12
+  } else if max_symbol <= 16385 {
+    14
+  } else {
+    16
   }
 }
 
@@ -334,16 +354,30 @@ fn webp_estimate_data_bits(
 fn webp_collect_channel_freqs(
   img : ImageData,
   subtract_green : Bool,
+  color_cache_bits : Int,
 ) -> (
   FixedArray[Int],
   FixedArray[Int],
   FixedArray[Int],
   FixedArray[Int],
 ) {
-  let green_freqs = FixedArray::make(256, 0)
+  let green_alphabet_size = if color_cache_bits > 0 {
+    256 + 24 + (1 << color_cache_bits)
+  } else {
+    256
+  }
+  let green_freqs = FixedArray::make(green_alphabet_size, 0)
   let red_freqs = FixedArray::make(256, 0)
   let blue_freqs = FixedArray::make(256, 0)
   let alpha_freqs = FixedArray::make(256, 0)
+  let color_cache = FixedArray::make(
+    if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 },
+    0,
+  )
+  let color_cache_valid = FixedArray::make(
+    if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 },
+    0,
+  )
   let pixel_count = img.width * img.height
   for i in 0..<pixel_count {
     let offset = i * 4
@@ -353,59 +387,83 @@ fn webp_collect_channel_freqs(
     let a = img.data[offset + 3].to_int() & 0xFF
     let enc_r = if subtract_green { (r - g) & 0xFF } else { r }
     let enc_b = if subtract_green { (b - g) & 0xFF } else { b }
-    green_freqs[g] += 1
-    red_freqs[enc_r] += 1
-    blue_freqs[enc_b] += 1
-    alpha_freqs[a] += 1
+    let color = webp_pack_argb(enc_r, g, enc_b, a)
+    if color_cache_bits > 0 {
+      let cache_idx = webp_color_cache_index(color, color_cache_bits)
+      if color_cache_valid[cache_idx] == 1 && color_cache[cache_idx] == color {
+        green_freqs[280 + cache_idx] += 1
+      } else {
+        green_freqs[g] += 1
+        red_freqs[enc_r] += 1
+        blue_freqs[enc_b] += 1
+        alpha_freqs[a] += 1
+      }
+      color_cache[cache_idx] = color
+      color_cache_valid[cache_idx] = 1
+    } else {
+      let enc_r = if subtract_green { (r - g) & 0xFF } else { r }
+      let enc_b = if subtract_green { (b - g) & 0xFF } else { b }
+      green_freqs[g] += 1
+      red_freqs[enc_r] += 1
+      blue_freqs[enc_b] += 1
+      alpha_freqs[a] += 1
+    }
   }
   (green_freqs, red_freqs, blue_freqs, alpha_freqs)
 }
 
 ///|
+fn webp_build_plan_candidate(
+  img : ImageData,
+  subtract_green : Bool,
+  color_cache_bits : Int,
+) -> (WebPEncodingPlan, Int) {
+  let (green_freqs, red_freqs, blue_freqs, alpha_freqs) = webp_collect_channel_freqs(
+    img,
+    subtract_green,
+    color_cache_bits,
+  )
+  let green_code = webp_build_prefix_code(green_freqs)
+  let red_code = webp_build_prefix_code(red_freqs)
+  let blue_code = webp_build_prefix_code(blue_freqs)
+  let alpha_code = webp_build_prefix_code(alpha_freqs)
+  let estimated_bits = webp_estimate_data_bits(green_freqs, green_code) +
+    webp_estimate_data_bits(red_freqs, red_code) +
+    webp_estimate_data_bits(blue_freqs, blue_code) +
+    webp_estimate_data_bits(alpha_freqs, alpha_code)
+  (
+    {
+      subtract_green,
+      color_cache_bits,
+      green_code,
+      red_code,
+      blue_code,
+      alpha_code,
+    },
+    estimated_bits,
+  )
+}
+
+///|
 fn webp_build_plan(img : ImageData) -> WebPEncodingPlan {
-  let (green_plain, red_plain, blue_plain, alpha_plain) = webp_collect_channel_freqs(
-    img,
-    false,
-  )
-  let green_plain_code = webp_build_prefix_code(green_plain)
-  let red_plain_code = webp_build_prefix_code(red_plain)
-  let blue_plain_code = webp_build_prefix_code(blue_plain)
-  let alpha_plain_code = webp_build_prefix_code(alpha_plain)
-  let plain_bits = webp_estimate_data_bits(green_plain, green_plain_code) +
-    webp_estimate_data_bits(red_plain, red_plain_code) +
-    webp_estimate_data_bits(blue_plain, blue_plain_code) +
-    webp_estimate_data_bits(alpha_plain, alpha_plain_code)
-
-  let (green_sub, red_sub, blue_sub, alpha_sub) = webp_collect_channel_freqs(
-    img,
-    true,
-  )
-  let green_sub_code = webp_build_prefix_code(green_sub)
-  let red_sub_code = webp_build_prefix_code(red_sub)
-  let blue_sub_code = webp_build_prefix_code(blue_sub)
-  let alpha_sub_code = webp_build_prefix_code(alpha_sub)
-  let subtract_bits = webp_estimate_data_bits(green_sub, green_sub_code) +
-    webp_estimate_data_bits(red_sub, red_sub_code) +
-    webp_estimate_data_bits(blue_sub, blue_sub_code) +
-    webp_estimate_data_bits(alpha_sub, alpha_sub_code)
-
-  if subtract_bits < plain_bits {
-    {
-      subtract_green: true,
-      green_code: green_sub_code,
-      red_code: red_sub_code,
-      blue_code: blue_sub_code,
-      alpha_code: alpha_sub_code,
-    }
-  } else {
-    {
-      subtract_green: false,
-      green_code: green_plain_code,
-      red_code: red_plain_code,
-      blue_code: blue_plain_code,
-      alpha_code: alpha_plain_code,
+  let initial = webp_build_plan_candidate(img, false, 0)
+  let mut best_plan = initial.0
+  let mut best_score = initial.1
+  for subtract_green_index in 0..<2 {
+    let subtract_green = subtract_green_index == 1
+    for color_cache_bits in 0..=4 {
+      let candidate = webp_build_plan_candidate(
+        img,
+        subtract_green,
+        color_cache_bits,
+      )
+      if candidate.1 < best_score {
+        best_plan = candidate.0
+        best_score = candidate.1
+      }
     }
   }
+  best_plan
 }
 
 ///|
@@ -413,6 +471,14 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
   let bw = WebPBitWriter::new()
   let pixel_count = img.width * img.height
   let plan = webp_build_plan(img)
+  let color_cache = FixedArray::make(
+    if plan.color_cache_bits > 0 { 1 << plan.color_cache_bits } else { 0 },
+    0,
+  )
+  let color_cache_valid = FixedArray::make(
+    if plan.color_cache_bits > 0 { 1 << plan.color_cache_bits } else { 0 },
+    0,
+  )
   let mut alpha_is_used = false
   for i in 0..<pixel_count {
     if img.data[i * 4 + 3].to_int() != 0xFF {
@@ -431,7 +497,12 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
     bw.put_bits(2, 2)
   }
   bw.put_bits(0, 1)
-  bw.put_bits(0, 1)
+  if plan.color_cache_bits > 0 {
+    bw.put_bits(1, 1)
+    bw.put_bits(plan.color_cache_bits, 4)
+  } else {
+    bw.put_bits(0, 1)
+  }
   bw.put_bits(0, 1)
 
   encode_webp_prefix_code(bw, plan.green_code)
@@ -448,10 +519,27 @@ fn encode_webp_lossless_payload(img : ImageData) -> Bytes {
     let alpha = img.data[offset + 3].to_int() & 0xFF
     let enc_red = if plan.subtract_green { (red - green) & 0xFF } else { red }
     let enc_blue = if plan.subtract_green { (blue - green) & 0xFF } else { blue }
-    webp_write_symbol(bw, plan.green_code, green)
-    webp_write_symbol(bw, plan.red_code, enc_red)
-    webp_write_symbol(bw, plan.blue_code, enc_blue)
-    webp_write_symbol(bw, plan.alpha_code, alpha)
+    let color = webp_pack_argb(enc_red, green, enc_blue, alpha)
+    if plan.color_cache_bits > 0 {
+      let cache_idx = webp_color_cache_index(color, plan.color_cache_bits)
+      if color_cache_valid[cache_idx] == 1 && color_cache[cache_idx] == color {
+        webp_write_symbol(bw, plan.green_code, 280 + cache_idx)
+      } else {
+        webp_write_symbol(bw, plan.green_code, green)
+        webp_write_symbol(bw, plan.red_code, enc_red)
+        webp_write_symbol(bw, plan.blue_code, enc_blue)
+        webp_write_symbol(bw, plan.alpha_code, alpha)
+      }
+      color_cache[cache_idx] = color
+      color_cache_valid[cache_idx] = 1
+    } else {
+      let enc_red = if plan.subtract_green { (red - green) & 0xFF } else { red }
+      let enc_blue = if plan.subtract_green { (blue - green) & 0xFF } else { blue }
+      webp_write_symbol(bw, plan.green_code, green)
+      webp_write_symbol(bw, plan.red_code, enc_red)
+      webp_write_symbol(bw, plan.blue_code, enc_blue)
+      webp_write_symbol(bw, plan.alpha_code, alpha)
+    }
   }
   bw.flush()
   bw.to_bytes()
