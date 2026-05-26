@@ -1,8 +1,8 @@
 {
   "name": "mizchi/image",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "deps": {
-    "mizchi/zlib": "0.4.4"
+    "mizchi/zlib": "0.4.6"
   },
   "readme": "README.mbt.md",
   "repository": "https://github.com/mizchi/image-mbt",
