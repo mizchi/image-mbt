@@ -31,11 +31,7 @@ fn reconstruct_row(
         let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
         buf[i] = ((row[i].to_int() + a) % 256).to_byte()
       }
-    2 =>
-      for i in 0..<len {
-        let b = prev[i].to_int()
-        buf[i] = ((row[i].to_int() + b) % 256).to_byte()
-      }
+    2 => reconstruct_filter_up_impl(row, prev, buf)
     3 =>
       for i in 0..<len {
         let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }

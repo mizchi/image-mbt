@@ -8,6 +8,35 @@
 // via png_filter_scalar.mbt).
 
 ///|
+/// Decode-side Up reconstruction: buf[i] = (row[i] + prev[i]) mod 256.
+/// Pure `i8x16.add` (modular byte add) on 16-byte chunks.
+fn reconstruct_filter_up_impl(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+) -> Unit {
+  let len = row.length()
+  if len == 0 {
+    return
+  }
+  reconstruct_filter_up_v128(row, prev, buf, len)
+}
+
+///|
+/// Inline-WAT for filter Up reconstruction. Same shape as the encoder
+/// `apply_filter_up_v128`, but using `i8x16.add` (decode) instead of sub.
+///
+/// Locals: 4 = vec_end, 5 = i.
+#borrow(row, prev, buf)
+fn reconstruct_filter_up_v128(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.add v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.add i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
 fn apply_filter_up_impl(row : Bytes, prev : Bytes) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')

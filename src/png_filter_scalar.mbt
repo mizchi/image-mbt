@@ -1,4 +1,18 @@
-// Scalar implementations of PNG encoder filters Up + Sub — non-wasm.
+// Scalar implementations of PNG filters — non-wasm.
+
+///|
+/// Decode-side Up reconstruction: buf[i] = (row[i] + prev[i]) mod 256.
+fn reconstruct_filter_up_impl(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+) -> Unit {
+  let len = row.length()
+  for i in 0..<len {
+    let b = prev[i].to_int()
+    buf[i] = ((row[i].to_int() + b) % 256).to_byte()
+  }
+}
 
 ///|
 fn apply_filter_up_impl(row : Bytes, prev : Bytes) -> FixedArray[Byte] {
