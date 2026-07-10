@@ -196,11 +196,12 @@ fn bytes_per_pixel(ct : ColorType, bit_depth : Int) -> Int {
 
 ///|
 test "color_type_from_png" {
-  assert_eq(color_type_from_png(0), Grayscale)
-  assert_eq(color_type_from_png(2), Rgb)
-  assert_eq(color_type_from_png(3), Indexed)
-  assert_eq(color_type_from_png(4), GrayscaleAlpha)
-  assert_eq(color_type_from_png(6), Rgba)
+  // TODO: Restore assert_eq once it supports Eq-only values without Debug.
+  assert_true(color_type_from_png(0) == Grayscale)
+  assert_true(color_type_from_png(2) == Rgb)
+  assert_true(color_type_from_png(3) == Indexed)
+  assert_true(color_type_from_png(4) == GrayscaleAlpha)
+  assert_true(color_type_from_png(6) == Rgba)
 }
 
 ///|

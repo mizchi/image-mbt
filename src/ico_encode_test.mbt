@@ -50,7 +50,8 @@ test "ico_encode single png entry roundtrip" {
   assert_eq(read_u16le_at_for_ico_test(ico, 10), 1)
   assert_eq(read_u16le_at_for_ico_test(ico, 12), 32)
   let decoded = decode_ico_png_payload_for_test(ico)
-  assert_eq(decoded, original)
+  // TODO: Restore assert_eq once it supports Eq-only values without Debug.
+  assert_true(decoded == original)
 }
 
 ///|

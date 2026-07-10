@@ -38,7 +38,8 @@ test "decode_image_stream PNG dispatch" {
   let png = encode_png(original)
   let rows : Array[Bytes] = []
   let info = decode_image_stream(png, on_row=fn(_y, row) { rows.push(row) })
-  assert_eq(info.format, Png)
+  // TODO: Restore assert_eq once it supports Eq-only values without Debug.
+  assert_true(info.format == Png)
   assert_eq(info.width, 8)
   assert_eq(info.height, 6)
   assert_eq(rows.length(), 6)
@@ -53,7 +54,7 @@ test "decode_image_stream BMP dispatch" {
   let bmp = encode_bmp(original)
   let rows : Array[Bytes] = []
   let info = decode_image_stream(bmp, on_row=fn(_y, row) { rows.push(row) })
-  assert_eq(info.format, Bmp)
+  assert_true(info.format == Bmp)
   assert_eq(info.width, 8)
   assert_eq(info.height, 6)
   assert_eq(rows.length(), 6)

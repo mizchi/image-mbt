@@ -227,7 +227,8 @@ test "gif_encode palette roundtrip" {
   let original = make_palette_test_image()
   let gif = encode_gif(original)
   let decoded = decode_gif_for_test(gif)
-  assert_eq(decoded, original)
+  // TODO: Restore assert_eq once it supports Eq-only values without Debug.
+  assert_true(decoded == original)
 }
 
 ///|
@@ -235,7 +236,7 @@ test "gif_encode transparent roundtrip" {
   let original = make_transparent_test_image()
   let gif = encode_gif(original)
   let decoded = decode_gif_for_test(gif)
-  assert_eq(decoded, original)
+  assert_true(decoded == original)
 }
 
 ///|

@@ -408,7 +408,8 @@ test "webp_encode restricted roundtrip" {
   let original = make_webp_test_image()
   let webp = encode_webp(original)
   let decoded = decode_webp_for_test(webp)
-  assert_eq(decoded, original)
+  // TODO: Restore assert_eq once it supports Eq-only values without Debug.
+  assert_true(decoded == original)
 }
 
 ///|
@@ -424,7 +425,7 @@ test "webp_encode uses subtract-green transform when beneficial" {
   let webp = encode_webp(img)
   let (decoded, uses_subtract_green, _) = decode_webp_for_test_impl(webp)
   assert_true(uses_subtract_green)
-  assert_eq(decoded, img)
+  assert_true(decoded == img)
 }
 
 ///|
@@ -434,7 +435,7 @@ test "webp_encode uses color cache when beneficial" {
   let (decoded, _, color_cache_bits) = decode_webp_for_test_impl(webp)
   assert_true(color_cache_bits > 0)
   assert_true(webp.length() < 512)
-  assert_eq(decoded, img)
+  assert_true(decoded == img)
 }
 
 ///|
@@ -446,7 +447,7 @@ test "webp_encode preserves transparent rgb" {
   }
   let webp = encode_webp(img)
   let decoded = decode_webp_for_test(webp)
-  assert_eq(decoded, img)
+  assert_true(decoded == img)
 }
 
 ///|
