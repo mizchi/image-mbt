@@ -10,7 +10,7 @@ pub(all) struct ImageData {
   width : Int
   height : Int
   data : Bytes
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub enum ColorType {
@@ -19,7 +19,7 @@ pub enum ColorType {
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct IhdrData {
@@ -36,7 +36,7 @@ pub(all) struct IhdrData {
 pub(all) enum ImageFormat {
   Png
   Bmp
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct StreamImageInfo {
