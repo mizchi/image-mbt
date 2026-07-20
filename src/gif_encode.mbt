@@ -114,7 +114,7 @@ fn gif_min_code_size(color_count : Int) -> Int {
 
 ///|
 fn collect_gif_palette(img : ImageData) -> GifPaletteData raise EncodeError {
-  let palette_map : Map[Int, Int] = Map::new()
+  let palette_map : Map[Int, Int] = Map([])
   let indices : Array[Int] = []
   let colors : Array[GifPaletteEntry] = []
   let mut transparent_index : Int? = None

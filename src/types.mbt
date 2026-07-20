@@ -19,7 +19,7 @@ pub enum ColorType {
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 ///|
 pub(all) struct IhdrData {
