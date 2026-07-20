@@ -47,11 +47,9 @@ test "decode_png_stream rows match decode_png" {
 
 ///|
 test "decode_png_stream invalid signature" {
-  let r : Result[IhdrData, _] = try? decode_png_stream(b"\x00\x00\x00\x00", on_row=fn(
-    _,
-    _,
-  ) {
-
-  })
-  assert_true(r is Err(_))
+  try decode_png_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  }) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected decode_png_stream to raise for invalid signature")
+  }
 }

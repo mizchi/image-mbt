@@ -95,11 +95,9 @@ test "decode_bmp_stream top_down row order" {
 
 ///|
 test "decode_bmp_stream invalid signature" {
-  let r : Result[(Int, Int), _] = try? decode_bmp_stream(b"\x00\x00\x00\x00", on_row=fn(
-    _,
-    _,
-  ) {
-
-  })
-  assert_true(r is Err(_))
+  try decode_bmp_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  }) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected decode_bmp_stream to raise for invalid signature")
+  }
 }

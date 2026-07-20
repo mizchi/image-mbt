@@ -22,7 +22,7 @@ fn decode_ico_png_payload_for_test(data : Bytes) -> ImageData raise {
   assert_eq(payload_offset, 22)
   assert_true(payload_offset + payload_size <= data.length())
   let payload = data[payload_offset:payload_offset + payload_size]
-  decode_png(payload.to_bytes())
+  decode_png(payload.to_owned())
 }
 
 ///|

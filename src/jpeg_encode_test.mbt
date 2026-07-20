@@ -83,16 +83,22 @@ test "jpeg_encode non 8 multiple roundtrip" {
 ///|
 test "jpeg_encode invalid dimensions and data length" {
   let img_invalid_dim : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
-  let r1 : Result[Bytes, _] = try? encode_jpeg(img_invalid_dim)
-  assert_true(r1 is Err(_))
+  try encode_jpeg(img_invalid_dim) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_jpeg to raise for invalid dimensions")
+  }
 
   let img_invalid_data : ImageData = {
     width: 2,
     height: 2,
     data: Bytes::new(4),
   }
-  let r2 : Result[Bytes, _] = try? encode_jpeg(img_invalid_data)
-  assert_true(r2 is Err(_))
+  try encode_jpeg(img_invalid_data) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_jpeg to raise for invalid data length")
+  }
 }
 
 ///|

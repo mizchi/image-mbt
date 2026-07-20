@@ -141,12 +141,21 @@ test "1x1 -> 3x3" {
 ///|
 test "invalid dimensions" {
   let img = make_2x2_image()
-  let r1 : Result[ImageData, _] = try? resize(img, 0, 4, Nearest)
-  assert_true(r1 is Err(_))
-  let r2 : Result[ImageData, _] = try? resize(img, 4, -1, Nearest)
-  assert_true(r2 is Err(_))
-  let r3 : Result[ImageData, _] = try? resize(img, 0, 0, Nearest)
-  assert_true(r3 is Err(_))
+  try resize(img, 0, 4, Nearest) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected resize to raise for width 0")
+  }
+  try resize(img, 4, -1, Nearest) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected resize to raise for negative height")
+  }
+  try resize(img, 0, 0, Nearest) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected resize to raise for zero dimensions")
+  }
 }
 
 ///|

@@ -64,9 +64,9 @@ test "decode_image_stream BMP dispatch" {
 
 ///|
 test "decode_image_stream invalid signature" {
-  let r : Result[StreamImageInfo, _] = try? decode_image_stream(
-    b"\x00\x11\x22\x33",
-    on_row=fn(_, _) {  },
-  )
-  assert_true(r is Err(_))
+  try decode_image_stream(b"\x00\x11\x22\x33", on_row=fn(_, _) {  }) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected decode_image_stream to raise for invalid signature")
+  }
 }

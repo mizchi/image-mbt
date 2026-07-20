@@ -241,23 +241,32 @@ test "gif_encode transparent roundtrip" {
 ///|
 test "gif_encode invalid dimensions and data length" {
   let img_invalid_dim : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
-  let r1 : Result[Bytes, _] = try? encode_gif(img_invalid_dim)
-  assert_true(r1 is Err(_))
+  try encode_gif(img_invalid_dim) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_gif to raise for invalid dimensions")
+  }
 
   let img_invalid_data : ImageData = {
     width: 2,
     height: 2,
     data: Bytes::new(4),
   }
-  let r2 : Result[Bytes, _] = try? encode_gif(img_invalid_data)
-  assert_true(r2 is Err(_))
+  try encode_gif(img_invalid_data) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_gif to raise for invalid data length")
+  }
 }
 
 ///|
 test "gif_encode rejects partial alpha" {
   let img : ImageData = { width: 1, height: 1, data: b"\x10\x20\x30\x80" }
-  let result : Result[Bytes, _] = try? encode_gif(img)
-  assert_true(result is Err(_))
+  try encode_gif(img) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_gif to raise for partial alpha")
+  }
 }
 
 ///|
@@ -273,6 +282,9 @@ test "gif_encode rejects more than 256 colors" {
     buf[idx + 3] = b'\xFF'
   }
   let img : ImageData = { width, height, data: Bytes::from_array(buf) }
-  let result : Result[Bytes, _] = try? encode_gif(img)
-  assert_true(result is Err(_))
+  try encode_gif(img) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected encode_gif to raise for more than 256 colors")
+  }
 }
