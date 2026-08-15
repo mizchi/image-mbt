@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/image"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
@@ -55,7 +59,7 @@ pub enum ColorType {
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub impl Show for ColorType
 
 pub(all) struct IhdrData {
@@ -73,13 +77,13 @@ pub(all) struct ImageData {
   width : Int
   height : Int
   data : Bytes
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub impl Show for ImageData
 
 pub(all) enum ImageFormat {
   Png
   Bmp
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub impl Show for ImageFormat
 
 pub(all) enum ResizeMethod {
@@ -99,4 +103,3 @@ pub impl Show for StreamImageInfo
 // Type aliases
 
 // Traits
-

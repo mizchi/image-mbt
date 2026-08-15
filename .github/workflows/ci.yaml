@@ -20,6 +20,9 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Install AVIF test tools
+        if: matrix.target == 'js'
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
       - name: Moon update
         run: moon update
       - name: Moon check
