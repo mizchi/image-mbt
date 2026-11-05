@@ -274,3 +274,15 @@ test "bench: resize bicubic 256x256 -> 160x120" (b : @bench.T) {
   let img = make_bench_image_256()
   b.bench(fn() { b.keep(resize(img, 160, 120, Bicubic)) catch { _ => () } })
 }
+
+///|
+test "bench: JPEG encode 256x256" (b : @bench.T) {
+  let img = make_bench_image_256()
+  b.bench(fn() { b.keep(encode_jpeg(img)) catch { _ => () } })
+}
+
+///|
+test "bench: JPEG decode 256x256" (b : @bench.T) {
+  let jpg = encode_jpeg(make_bench_image_256()) catch { _ => panic() }
+  b.bench(fn() { b.keep(decode_jpeg(jpg)) catch { _ => () } })
+}

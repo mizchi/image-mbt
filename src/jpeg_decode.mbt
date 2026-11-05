@@ -144,8 +144,13 @@ let idct_c : FixedArray[Double] = {
 }
 
 ///|
-// IDCT using pre-computed cosine table
-fn idct_block(coeff : FixedArray[Int32], output : FixedArray[Int32]) -> Unit {
+// IDCT using pre-computed cosine table (scalar reference).
+// Only referenced by tests on wasm, where the SIMD version is used.
+#warnings("-unused_value")
+fn idct_block_ref(
+  coeff : FixedArray[Int32],
+  output : FixedArray[Int32],
+) -> Unit {
   let tmp = FixedArray::make(64, 0.0)
   // First pass: columns
   for x in 0..<8 {

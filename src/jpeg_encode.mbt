@@ -201,7 +201,13 @@ fn rgba_to_ycbcr(r : Int32, g : Int32, b : Int32) -> (Int32, Int32, Int32) {
 
 ///|
 // Forward DCT matching the decoder's idct_cos_table / idct_c convention.
-fn fdct_block(input : FixedArray[Int32], output : FixedArray[Double]) -> Unit {
+// Scalar reference; see jpeg_dct_simd.mbt for the wasm SIMD version.
+// Only referenced by tests on wasm, where the SIMD version is used.
+#warnings("-unused_value")
+fn fdct_block_ref(
+  input : FixedArray[Int32],
+  output : FixedArray[Double],
+) -> Unit {
   let tmp = FixedArray::make(64, 0.0)
   for y in 0..<8 {
     for v in 0..<8 {
