@@ -7,7 +7,7 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 - **PNG** decode (all color types and bit depths, `tRNS` transparency, Adam7 interlace) / encode (RGBA8, adaptive row filtering)
 - **BMP** decode (1/2/4/8-bit palette, RLE4/RLE8, 16/24/32-bit, bit fields) / encode
 - **JPEG** baseline / extended sequential / progressive decode with restart markers / baseline encode
-- **GIF** encode (single-frame, indexed palette, binary transparency)
+- **GIF** decode (static and animated, frame compositing) / encode (single-frame, indexed palette, binary transparency)
 - **WebP** lossless encode (still image)
 - **ICO** decode (PNG / BMP payloads, AND mask) / encode (single-image, PNG payload)
 - **AVIF** encode (js target MVP, opaque still image)
@@ -47,8 +47,14 @@ let ico = @image.encode_ico(resized)
 // AVIF encode (js target MVP, opaque images only)
 let avif = @image.encode_avif(resized)
 
-// Auto-detect PNG / JPEG / BMP / ICO
+// Auto-detect PNG / JPEG / GIF / BMP / ICO
 let any = @image.decode_image(image_bytes)
+
+// Animated GIF: composited frames with delays
+let anim = @image.decode_gif_frames(gif_bytes)
+for frame in anim.frames {
+  ignore((frame.image, frame.delay_ms))
+}
 
 // Stream decode (PNG/BMP auto detect)
 let rows : Array[Bytes] = []
@@ -70,6 +76,8 @@ pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 pub fn decode_bmp_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> (Int, Int) raise DecodeError
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
+pub fn decode_gif(Bytes) -> ImageData raise DecodeError
+pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
 pub fn decode_ico(Bytes) -> ImageData raise DecodeError
 pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
 pub fn decode_image(Bytes) -> ImageData raise DecodeError
@@ -86,6 +94,8 @@ pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 ```
 pub(all) struct ImageData { width : Int; height : Int; data : Bytes }
 pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
+pub(all) struct GifFrame { image : ImageData; delay_ms : Int }
+pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFrame]; loop_count : Int? }
 ```
 
 ## Support
@@ -95,7 +105,7 @@ pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 | PNG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: grayscale / RGB / indexed / alpha at 1-16 bit, `tRNS`, Adam7; RGBA8 normalize, stream decode |
 | BMP | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: 1/2/4/8/16/24/32-bit, RLE4/RLE8, bit fields, V2-V5 / OS/2 headers; encode: 32-bit BGRA |
 | JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan |
-| GIF | no | yes | `js` / `native` / `wasm` / `wasm-gc` | single-frame, `<=256` colors, alpha `0/255` only |
+| GIF | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: GIF87a/89a, interlace, transparency, animation (disposal 1-3, delays, loop count); encode: single-frame, `<=256` colors, alpha `0/255` only |
 | WebP | no | yes | `js` / `native` / `wasm` / `wasm-gc` | lossless still-image encoder |
 | ICO | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: ICO/CUR, PNG or BMP payloads with AND mask; encode: single PNG payload, `<=256x256` |
 | AVIF | no | yes | `js` | opaque images only, requires browser AVIF canvas support or local `ffmpeg` |

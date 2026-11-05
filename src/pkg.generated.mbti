@@ -10,6 +10,10 @@ pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int32) raise DecodeError
 
+pub fn decode_gif(Bytes) -> ImageData raise DecodeError
+
+pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
+
 pub fn decode_ico(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
@@ -75,6 +79,18 @@ pub fn ColorType::equal(Self, Self) -> Bool
 pub fn ColorType::output(Self, &Logger) -> Unit
 pub fn ColorType::to_string(Self) -> String
 pub impl Show for ColorType
+
+pub(all) struct GifAnimation {
+  width : Int32
+  height : Int32
+  frames : Array[GifFrame]
+  loop_count : Int32?
+}
+
+pub(all) struct GifFrame {
+  image : ImageData
+  delay_ms : Int32
+}
 
 #derive(Eq)
 pub(all) struct IhdrData {
