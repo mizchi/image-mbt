@@ -31,3 +31,37 @@ pub fn decode_image_stream(
   }
   raise InvalidSignature("unknown image format")
 }
+
+///|
+fn is_jpeg_signature(raw : Bytes) -> Bool {
+  raw.length() >= 3 &&
+  raw[0] == b'\xFF' &&
+  raw[1] == b'\xD8' &&
+  raw[2] == b'\xFF'
+}
+
+///|
+fn is_ico_signature(raw : Bytes) -> Bool {
+  raw.length() >= 6 &&
+  raw[0] == b'\x00' &&
+  raw[1] == b'\x00' &&
+  (raw[2] == b'\x01' || raw[2] == b'\x02') &&
+  raw[3] == b'\x00' &&
+  (raw[4] != b'\x00' || raw[5] != b'\x00')
+}
+
+///|
+/// Decode a PNG, JPEG, BMP or ICO/CUR image, detected from its signature.
+pub fn decode_image(raw : Bytes) -> ImageData raise DecodeError {
+  if is_png_signature(raw) {
+    decode_png(raw)
+  } else if is_jpeg_signature(raw) {
+    decode_jpeg(raw)
+  } else if is_bmp_signature(raw) {
+    decode_bmp(raw)
+  } else if is_ico_signature(raw) {
+    decode_ico(raw)
+  } else {
+    raise InvalidSignature("unknown image format")
+  }
+}

@@ -1,6 +1,6 @@
 name = "mizchi/image"
 
-version = "0.5.0"
+version = "0.6.0"
 
 import {
   "mizchi/zlib@0.4.10",

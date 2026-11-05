@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- JPEG decode: restart intervals (DRI/RST), SOF1 extended sequential,
+  non-interleaved single-component scans; progressive / lossless /
+  arithmetic files report `UnsupportedFeature`
+- PNG decode: Adam7 interlaced images
+- BMP decode: 1/2/4/8-bit palettes, RLE8/RLE4, 16-bit, BI_BITFIELDS /
+  BI_ALPHABITFIELDS, V2-V5 and OS/2 headers; 32-bit BI_RGB with all-zero
+  alpha is opaque
+- New `decode_ico` / `decode_ico_all` (ICO/CUR, PNG or BMP payloads with
+  AND mask) and `decode_image` (PNG / JPEG / BMP / ICO auto-detect)
+
 ## 0.5.0
 
 - Support the latest MoonBit toolchain (0.10.19+): `#derive`, explicit

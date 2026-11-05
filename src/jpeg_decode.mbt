@@ -1,6 +1,6 @@
 ///|
-// JPEG Baseline (SOF0) decoder
-// Supports: 8-bit, YCbCr, 4:4:4 and 4:2:0 subsampling
+// JPEG sequential Huffman (SOF0 baseline / SOF1 extended, 8-bit) decoder
+// Supports: grayscale and YCbCr, any h/v sampling, restart intervals (DRI/RST)
 
 ///|
 priv struct JpegBitReader {
@@ -51,6 +51,28 @@ fn JpegBitReader::read_bits(
   self.bits_left -= count
   (self.bit_buf.reinterpret_as_uint() >> self.bits_left).reinterpret_as_int() &
   ((1 << count) - 1)
+}
+
+///|
+/// Handle a restart marker: drop the remaining (padding) bits of the
+/// current byte and consume the next `RSTn` marker. Fill bytes (0xFF) before
+/// the marker are skipped.
+fn JpegBitReader::restart(self : JpegBitReader) -> Unit raise DecodeError {
+  self.bit_buf = 0
+  self.bits_left = 0
+  let data = self.data
+  while self.pos + 1 < data.length() &&
+        data[self.pos].to_int() == 0xFF &&
+        data[self.pos + 1].to_int() == 0xFF {
+    self.pos += 1
+  }
+  if self.pos + 1 >= data.length() ||
+    data[self.pos].to_int() != 0xFF ||
+    data[self.pos + 1].to_int() < 0xD0 ||
+    data[self.pos + 1].to_int() > 0xD7 {
+    raise CorruptData("expected RST marker at byte " + self.pos.to_string())
+  }
+  self.pos += 2
 }
 
 ///|
@@ -117,6 +139,18 @@ fn receive_extend(br : JpegBitReader, nbits : Int32) -> Int32 raise DecodeError 
     value - (1 << nbits) + 1
   } else {
     value
+  }
+}
+
+///|
+/// Name of a SOF marker this decoder does not handle, if `marker` is one.
+fn jpeg_unsupported_sof(marker : Int32) -> String? {
+  match marker {
+    0xC2 => Some("progressive")
+    0xC3 => Some("lossless")
+    0xC5 | 0xC6 | 0xC7 => Some("hierarchical")
+    0xC9 | 0xCA | 0xCB | 0xCD | 0xCE | 0xCF => Some("arithmetic-coded")
+    _ => None
   }
 }
 
@@ -224,6 +258,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   let mut frame_info : JpegFrameInfo? = None
   let mut scan_components : Array[JpegScanComponent] = []
   let mut scan_start = 0
+  let mut restart_interval = 0
   // Parse markers
   while pos + 1 < data.length() {
     if data[pos].to_int() != 0xFF {
@@ -272,8 +307,9 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         }
         quant_tables[tq] = Some(qt)
       }
-    } else if marker == 0xC0 {
-      // SOF0 - Start Of Frame (Baseline DCT)
+    } else if marker == 0xC0 || marker == 0xC1 {
+      // SOF0 (Baseline DCT) / SOF1 (Extended sequential DCT, Huffman).
+      // With 8-bit samples SOF1 decodes exactly like SOF0.
       let precision = data[pos + 2].to_int()
       if precision != 8 {
         raise UnsupportedFeature(
@@ -307,6 +343,11 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         components.push({ id, h_sample: h, v_sample: v, quant_id: qid, })
       }
       frame_info = Some({ width, height, components, max_h, max_v, })
+    } else if jpeg_unsupported_sof(marker) is Some(kind) {
+      raise UnsupportedFeature(kind + " JPEG not supported")
+    } else if marker == 0xDD {
+      // DRI - Define Restart Interval (in MCUs, 0 = disabled)
+      restart_interval = read_u16be_at(data, pos + 2)
     } else if marker == 0xC4 {
       // DHT - Define Huffman Table
       let mut hpos = pos + 2
@@ -346,7 +387,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         // Find component index
         let fi = match frame_info {
           Some(fi) => fi
-          None => raise MissingChunk("SOF0 must precede SOS")
+          None => raise MissingChunk("SOF must precede SOS")
         }
         let mut comp_idx = 0
         for j in 0..<fi.components.length() {
@@ -367,7 +408,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   }
   let fi = match frame_info {
     Some(fi) => fi
-    None => raise MissingChunk("SOF0")
+    None => raise MissingChunk("SOF0/SOF1")
   }
   if scan_start == 0 {
     raise MissingChunk("SOS")
@@ -391,76 +432,112 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   let prev_dc = FixedArray::make(ncomp, 0)
   let block = FixedArray::make(64, 0)
   let idct_out = FixedArray::make(64, 0)
-  for mcu_y in 0..<mcu_rows {
-    for mcu_x in 0..<mcu_cols {
+  // Resolve tables per scan component once.
+  let scan_dc : Array[HuffmanTable] = []
+  let scan_ac : Array[HuffmanTable] = []
+  let scan_qt : Array[FixedArray[Int32]] = []
+  for sc in scan_components {
+    let c = fi.components[sc.comp_idx]
+    scan_dc.push(
+      match dc_tables[sc.dc_table_id] {
+        Some(t) => t
+        None =>
+          raise MissingChunk("DC Huffman table " + sc.dc_table_id.to_string())
+      },
+    )
+    scan_ac.push(
+      match ac_tables[sc.ac_table_id] {
+        Some(t) => t
+        None =>
+          raise MissingChunk("AC Huffman table " + sc.ac_table_id.to_string())
+      },
+    )
+    scan_qt.push(
+      match quant_tables[c.quant_id] {
+        Some(t) => t
+        None =>
+          raise MissingChunk("quantization table " + c.quant_id.to_string())
+      },
+    )
+  }
+  // Decode one 8x8 block of scan component `si` at block coords (bx, by).
+  fn decode_block(
+    si : Int32,
+    bx : Int32,
+    by : Int32,
+  ) -> Unit raise DecodeError {
+    let ci = scan_components[si].comp_idx
+    let c = fi.components[ci]
+    let dc_tab = scan_dc[si]
+    let ac_tab = scan_ac[si]
+    let qt = scan_qt[si]
+    // DC coefficient
+    let dc_cat = decode_huffman(br, dc_tab)
+    let dc_diff = receive_extend(br, dc_cat)
+    prev_dc[ci] += dc_diff
+    block.fill(0)
+    block[0] = prev_dc[ci] * qt[0]
+    // AC coefficients
+    let mut k = 1
+    while k < 64 {
+      let rs = decode_huffman(br, ac_tab)
+      let run = rs >> 4
+      let size = rs & 0x0F
+      if size == 0 {
+        if run == 0x0F {
+          k += 16
+          continue
+        }
+        break // EOB
+      }
+      k += run
+      if k >= 64 {
+        break
+      }
+      let ac_val = receive_extend(br, size)
+      block[jpeg_zigzag[k]] = ac_val * qt[jpeg_zigzag[k]]
+      k += 1
+    }
+    idct_block(block, idct_out)
+    // Write block to component buffer
+    let comp_stride = mcu_cols * c.h_sample * 8
+    let px = bx * 8
+    let py = by * 8
+    for yy in 0..<8 {
+      let row = (py + yy) * comp_stride + px
+      for xx in 0..<8 {
+        comp_bufs[ci][row + xx] = idct_out[yy * 8 + xx]
+      }
+    }
+  }
+
+  // A scan with one component is non-interleaved: its MCU is a single
+  // block, and it covers ceil(component size / 8) blocks (JPEG A.2.2).
+  // Otherwise each MCU holds h x v blocks of every component (A.2.3).
+  let (units_x, units_y) = if scan_components.length() == 1 {
+    let c = fi.components[scan_components[0].comp_idx]
+    let comp_w = (fi.width * c.h_sample + fi.max_h - 1) / fi.max_h
+    let comp_h = (fi.height * c.v_sample + fi.max_v - 1) / fi.max_v
+    ((comp_w + 7) / 8, (comp_h + 7) / 8)
+  } else {
+    (mcu_cols, mcu_rows)
+  }
+  let total_units = units_x * units_y
+  for unit in 0..<total_units {
+    if restart_interval > 0 && unit > 0 && unit % restart_interval == 0 {
+      br.restart()
+      prev_dc.fill(0)
+    }
+    let ux = unit % units_x
+    let uy = unit / units_x
+    if scan_components.length() == 1 {
+      decode_block(0, ux, uy)
+    } else {
       for si in 0..<scan_components.length() {
-        let sc = scan_components[si]
-        let ci = sc.comp_idx
-        let c = fi.components[ci]
-        let dc_tab = match dc_tables[sc.dc_table_id] {
-          Some(t) => t
-          None =>
-            raise MissingChunk("DC Huffman table " + sc.dc_table_id.to_string())
-        }
-        let ac_tab = match ac_tables[sc.ac_table_id] {
-          Some(t) => t
-          None =>
-            raise MissingChunk("AC Huffman table " + sc.ac_table_id.to_string())
-        }
-        let qt = match quant_tables[c.quant_id] {
-          Some(t) => t
-          None =>
-            raise MissingChunk("quantization table " + c.quant_id.to_string())
-        }
+        let c = fi.components[scan_components[si].comp_idx]
         for bv in 0..<c.v_sample {
           for bh in 0..<c.h_sample {
-            // Decode one 8x8 block
-            // DC coefficient
-            let dc_cat = decode_huffman(br, dc_tab)
-            let dc_diff = receive_extend(br, dc_cat)
-            prev_dc[ci] += dc_diff
-            // Clear block
-            for i in 0..<64 {
-              block[i] = 0
-            }
-            block[0] = prev_dc[ci] * qt[0]
-            // AC coefficients
-            let mut k = 1
-            while k < 64 {
-              let rs = decode_huffman(br, ac_tab)
-              let run = (rs.reinterpret_as_uint() >> 4).reinterpret_as_int()
-              let size = rs & 0x0F
-              if size == 0 {
-                if run == 0 {
-                  break // EOB
-                }
-                if run == 0x0F {
-                  k += 16
-                  continue
-                }
-                break
-              }
-              k += run
-              if k >= 64 {
-                break
-              }
-              let ac_val = receive_extend(br, size)
-              block[jpeg_zigzag[k]] = ac_val * qt[jpeg_zigzag[k]]
-              k += 1
-            }
-            // IDCT
-            idct_block(block, idct_out)
-            // Write block to component buffer
-            let comp_stride = mcu_cols * c.h_sample * 8
-            let bx = (mcu_x * c.h_sample + bh) * 8
-            let by = (mcu_y * c.v_sample + bv) * 8
-            for yy in 0..<8 {
-              for xx in 0..<8 {
-                comp_bufs[ci][(by + yy) * comp_stride + bx + xx] = idct_out[yy *
-                  8 +
-                  xx]
-              }
-            }
+            decode_block(si, ux * c.h_sample + bh, uy * c.v_sample + bv)
           }
         }
       }
