@@ -121,7 +121,7 @@ test "ico: invalid input" {
 }
 
 ///|
-test "decode_image: detects PNG, JPEG, BMP and ICO" {
+test "decode_image: detects PNG, JPEG, GIF, BMP and ICO" {
   let data = FixedArray::make(8 * 8 * 4, b'\xFF')
   let img : @image.ImageData = {
     width: 8,
@@ -133,6 +133,9 @@ test "decode_image: detects PNG, JPEG, BMP and ICO" {
   assert_eq(@image.decode_image(@image.encode_ico(img)), img)
   let jpg = @image.encode_jpeg(img)
   assert_eq(@image.decode_image(jpg), @image.decode_jpeg(jpg))
-  let unknown = Ok(@image.decode_image(b"GIF89a")) catch { e => Err(e) }
+  assert_eq(@image.decode_image(@image.encode_gif(img)), img)
+  let unknown = Ok(@image.decode_image(b"\x01\x02\x03\x04")) catch {
+    e => Err(e)
+  }
   assert_true(unknown is Err(@image.InvalidSignature(_)))
 }

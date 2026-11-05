@@ -51,12 +51,15 @@ fn is_ico_signature(raw : Bytes) -> Bool {
 }
 
 ///|
-/// Decode a PNG, JPEG, BMP or ICO/CUR image, detected from its signature.
+/// Decode a PNG, JPEG, GIF (first frame), BMP or ICO/CUR image, detected
+/// from its signature.
 pub fn decode_image(raw : Bytes) -> ImageData raise DecodeError {
   if is_png_signature(raw) {
     decode_png(raw)
   } else if is_jpeg_signature(raw) {
     decode_jpeg(raw)
+  } else if gif_signature_ok(raw) {
+    decode_gif(raw)
   } else if is_bmp_signature(raw) {
     decode_bmp(raw)
   } else if is_ico_signature(raw) {

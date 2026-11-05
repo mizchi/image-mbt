@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+- JPEG decode: progressive (SOF2) images, including spectral selection
+  and successive approximation (DC/AC first and refinement scans) and
+  restart markers
+- JPEG decode: decode every scan of sequential files, so baseline images
+  with one scan per component now decode (previously only the first scan
+  was read)
+- GIF decode: `decode_gif` (first frame) and `decode_gif_frames`
+  (`GifAnimation` with composited RGBA frames, per-frame delays and the
+  NETSCAPE loop count). Supports GIF87a/89a, global / local color tables,
+  interlaced frames, transparency and disposal methods 1-3; the canvas
+  starts transparent, as in browsers
+- `decode_image` also detects GIF
+
 ## 0.6.0
 
 - JPEG decode: restart intervals (DRI/RST), SOF1 extended sequential,
