@@ -10,6 +10,12 @@ pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int32) raise DecodeError
 
+pub fn decode_ico(Bytes) -> ImageData raise DecodeError
+
+pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
+
+pub fn decode_image(Bytes) -> ImageData raise DecodeError
+
 pub fn decode_image_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
 
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
