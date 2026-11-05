@@ -37,3 +37,59 @@ fn apply_filter_sub_impl(row : Bytes, bpp : Int32) -> FixedArray[Byte] {
   }
   buf
 }
+
+///|
+fn reconstruct_filter_sub_impl(
+  row : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+) -> Unit {
+  reconstruct_sub_range(row, buf, bpp, 0, row.length())
+}
+
+///|
+fn reconstruct_filter_average_impl(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+) -> Unit {
+  reconstruct_average_range(row, prev, buf, bpp, 0, row.length())
+}
+
+///|
+fn reconstruct_filter_paeth_impl(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+) -> Unit {
+  reconstruct_paeth_range(row, prev, buf, bpp, 0, row.length())
+}
+
+///|
+fn apply_filter_average_impl(
+  row : Bytes,
+  prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
+  let buf = FixedArray::make(row.length(), b'\x00')
+  apply_average_range(row, prev, buf, bpp, 0, row.length())
+  buf
+}
+
+///|
+fn apply_filter_paeth_impl(
+  row : Bytes,
+  prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
+  let buf = FixedArray::make(row.length(), b'\x00')
+  apply_paeth_range(row, prev, buf, bpp, 0, row.length())
+  buf
+}
+
+///|
+fn filter_sum_impl(buf : FixedArray[Byte]) -> Int32 {
+  filter_sum_range(buf, 0, buf.length())
+}
