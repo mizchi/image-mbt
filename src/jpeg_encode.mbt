@@ -1,17 +1,17 @@
 ///|
 priv struct JpegBitWriter {
   buf : Array[Byte]
-  mut bit_buf : Int
-  mut bits_count : Int
+  mut bit_buf : Int32
+  mut bits_count : Int32
 }
 
 ///|
 fn JpegBitWriter::new() -> JpegBitWriter {
-  { buf: [], bit_buf: 0, bits_count: 0 }
+  { buf: [], bit_buf: 0, bits_count: 0, }
 }
 
 ///|
-fn JpegBitWriter::write_byte(self : JpegBitWriter, value : Int) -> Unit {
+fn JpegBitWriter::write_byte(self : JpegBitWriter, value : Int32) -> Unit {
   let b = value & 0xFF
   self.buf.push(b.to_byte())
   if b == 0xFF {
@@ -22,8 +22,8 @@ fn JpegBitWriter::write_byte(self : JpegBitWriter, value : Int) -> Unit {
 ///|
 fn JpegBitWriter::write_bits(
   self : JpegBitWriter,
-  value : Int,
-  count : Int,
+  value : Int32,
+  count : Int32,
 ) -> Unit {
   if count <= 0 {
     return
@@ -66,14 +66,14 @@ fn JpegBitWriter::to_bytes(self : JpegBitWriter) -> Bytes {
 
 ///|
 priv struct HuffmanEncodeTable {
-  codes : FixedArray[Int]
-  lengths : FixedArray[Int]
+  codes : FixedArray[Int32]
+  lengths : FixedArray[Int32]
 }
 
 ///|
 fn build_huffman_encode_table(
-  bits : FixedArray[Int],
-  vals : FixedArray[Int],
+  bits : FixedArray[Int32],
+  vals : FixedArray[Int32],
 ) -> HuffmanEncodeTable {
   let codes = FixedArray::make(256, 0)
   let lengths = FixedArray::make(256, 0)
@@ -90,45 +90,45 @@ fn build_huffman_encode_table(
     }
     code = code << 1
   }
-  { codes, lengths }
+  { codes, lengths, }
 }
 
 ///|
 // Annex K.3
-let jpeg_huff_bits_dc_luma : FixedArray[Int] = [
+let jpeg_huff_bits_dc_luma : FixedArray[Int32] = [
   0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
 ]
 
 ///|
 // Annex K.4
-let jpeg_huff_bits_dc_chroma : FixedArray[Int] = [
+let jpeg_huff_bits_dc_chroma : FixedArray[Int32] = [
   0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
 ]
 
 ///|
 // Annex K.5
-let jpeg_huff_bits_ac_luma : FixedArray[Int] = [
+let jpeg_huff_bits_ac_luma : FixedArray[Int32] = [
   0, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 0x7D,
 ]
 
 ///|
 // Annex K.6
-let jpeg_huff_bits_ac_chroma : FixedArray[Int] = [
+let jpeg_huff_bits_ac_chroma : FixedArray[Int32] = [
   0, 0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 0x77,
 ]
 
 ///|
-let jpeg_huff_vals_dc_luma : FixedArray[Int] = [
+let jpeg_huff_vals_dc_luma : FixedArray[Int32] = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 ]
 
 ///|
-let jpeg_huff_vals_dc_chroma : FixedArray[Int] = [
+let jpeg_huff_vals_dc_chroma : FixedArray[Int32] = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 ]
 
 ///|
-let jpeg_huff_vals_ac_luma : FixedArray[Int] = [
+let jpeg_huff_vals_ac_luma : FixedArray[Int32] = [
   0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13, 0x51,
   0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1,
   0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18,
@@ -144,7 +144,7 @@ let jpeg_huff_vals_ac_luma : FixedArray[Int] = [
 ]
 
 ///|
-let jpeg_huff_vals_ac_chroma : FixedArray[Int] = [
+let jpeg_huff_vals_ac_chroma : FixedArray[Int32] = [
   0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51, 0x07,
   0x61, 0x71, 0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xA1, 0xB1, 0xC1, 0x09,
   0x23, 0x33, 0x52, 0xF0, 0x15, 0x62, 0x72, 0xD1, 0x0A, 0x16, 0x24, 0x34, 0xE1, 0x25,
@@ -160,7 +160,7 @@ let jpeg_huff_vals_ac_chroma : FixedArray[Int] = [
 ]
 
 ///|
-fn round_to_int(v : Double) -> Int {
+fn round_to_int(v : Double) -> Int32 {
   if v >= 0.0 {
     (v + 0.5).to_int()
   } else {
@@ -169,18 +169,18 @@ fn round_to_int(v : Double) -> Int {
 }
 
 ///|
-fn clamp_u8(v : Int) -> Int {
+fn clamp_u8(v : Int32) -> Int32 {
   v.clamp(min=0, max=255)
 }
 
 ///|
-fn write_u16be(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
+fn write_u16be(buf : FixedArray[Byte], offset : Int32, value : Int32) -> Unit {
   buf[offset] = ((value >> 8) & 0xFF).to_byte()
   buf[offset + 1] = (value & 0xFF).to_byte()
 }
 
 ///|
-fn rgba_to_ycbcr(r : Int, g : Int, b : Int) -> (Int, Int, Int) {
+fn rgba_to_ycbcr(r : Int32, g : Int32, b : Int32) -> (Int32, Int32, Int32) {
   let y = round_to_int(
     0.299 * r.to_double() + 0.587 * g.to_double() + 0.114 * b.to_double(),
   )
@@ -201,7 +201,13 @@ fn rgba_to_ycbcr(r : Int, g : Int, b : Int) -> (Int, Int, Int) {
 
 ///|
 // Forward DCT matching the decoder's idct_cos_table / idct_c convention.
-fn fdct_block(input : FixedArray[Int], output : FixedArray[Double]) -> Unit {
+// Scalar reference; see jpeg_dct_simd.mbt for the wasm SIMD version.
+// Only referenced by tests on wasm, where the SIMD version is used.
+#warnings("-unused_value")
+fn fdct_block_ref(
+  input : FixedArray[Int32],
+  output : FixedArray[Double],
+) -> Unit {
   let tmp = FixedArray::make(64, 0.0)
   for y in 0..<8 {
     for v in 0..<8 {
@@ -225,9 +231,9 @@ fn fdct_block(input : FixedArray[Int], output : FixedArray[Double]) -> Unit {
 
 ///|
 fn jpeg_scale_quant_table(
-  base : FixedArray[Int],
-  quality : Int,
-) -> FixedArray[Int] {
+  base : FixedArray[Int32],
+  quality : Int32,
+) -> FixedArray[Int32] {
   let q = quality.clamp(min=1, max=100)
   let scale = if q < 50 { 5000 / q } else { 200 - 2 * q }
   let out = FixedArray::make(64, 0)
@@ -241,8 +247,8 @@ fn jpeg_scale_quant_table(
 ///|
 fn quantize_and_zigzag(
   dct : FixedArray[Double],
-  quant : FixedArray[Int],
-  output : FixedArray[Int],
+  quant : FixedArray[Int32],
+  output : FixedArray[Int32],
 ) -> Unit {
   for i in 0..<64 {
     let idx = jpeg_zigzag[i]
@@ -252,7 +258,7 @@ fn quantize_and_zigzag(
 }
 
 ///|
-fn jpeg_bit_category(value : Int) -> Int {
+fn jpeg_bit_category(value : Int32) -> Int32 {
   if value == 0 {
     return 0
   }
@@ -266,7 +272,7 @@ fn jpeg_bit_category(value : Int) -> Int {
 }
 
 ///|
-fn jpeg_bit_payload(value : Int, category : Int) -> Int {
+fn jpeg_bit_payload(value : Int32, category : Int32) -> Int32 {
   if category == 0 {
     0
   } else if value >= 0 {
@@ -279,7 +285,7 @@ fn jpeg_bit_payload(value : Int, category : Int) -> Int {
 ///|
 fn encode_dc(
   bw : JpegBitWriter,
-  diff : Int,
+  diff : Int32,
   table : HuffmanEncodeTable,
 ) -> Unit {
   let cat = jpeg_bit_category(diff)
@@ -292,7 +298,7 @@ fn encode_dc(
 ///|
 fn encode_ac(
   bw : JpegBitWriter,
-  coeffs : FixedArray[Int],
+  coeffs : FixedArray[Int32],
   table : HuffmanEncodeTable,
 ) -> Unit {
   let mut run = 0
@@ -345,7 +351,7 @@ fn jpeg_marker_app0() -> Bytes {
 }
 
 ///|
-fn jpeg_marker_dqt(id : Int, quant : FixedArray[Int]) -> Bytes {
+fn jpeg_marker_dqt(id : Int32, quant : FixedArray[Int32]) -> Bytes {
   let buf = FixedArray::make(69, b'\x00')
   buf[0] = b'\xFF'
   buf[1] = b'\xDB'
@@ -358,7 +364,7 @@ fn jpeg_marker_dqt(id : Int, quant : FixedArray[Int]) -> Bytes {
 }
 
 ///|
-fn jpeg_marker_sof0(width : Int, height : Int) -> Bytes {
+fn jpeg_marker_sof0(width : Int32, height : Int32) -> Bytes {
   let buf = FixedArray::make(19, b'\x00')
   buf[0] = b'\xFF'
   buf[1] = b'\xC0'
@@ -384,10 +390,10 @@ fn jpeg_marker_sof0(width : Int, height : Int) -> Bytes {
 
 ///|
 fn jpeg_marker_dht(
-  class : Int,
-  id : Int,
-  bits : FixedArray[Int],
-  vals : FixedArray[Int],
+  class : Int32,
+  id : Int32,
+  bits : FixedArray[Int32],
+  vals : FixedArray[Int32],
 ) -> Bytes {
   let payload_len = 1 + 16 + vals.length()
   let seg_len = payload_len + 2
@@ -435,14 +441,14 @@ fn jpeg_marker_eoi() -> Bytes {
 ///|
 fn encode_component_block(
   bw : JpegBitWriter,
-  input : FixedArray[Int],
+  input : FixedArray[Int32],
   dct : FixedArray[Double],
-  coeffs : FixedArray[Int],
-  quant : FixedArray[Int],
+  coeffs : FixedArray[Int32],
+  quant : FixedArray[Int32],
   dc_table : HuffmanEncodeTable,
   ac_table : HuffmanEncodeTable,
-  prev_dc : FixedArray[Int],
-  comp_idx : Int,
+  prev_dc : FixedArray[Int32],
+  comp_idx : Int32,
 ) -> Unit {
   fdct_block(input, dct)
   quantize_and_zigzag(dct, quant, coeffs)
@@ -455,7 +461,7 @@ fn encode_component_block(
 ///|
 pub fn encode_jpeg(
   img : ImageData,
-  quality? : Int = 85,
+  quality~ : Int32 = 85,
 ) -> Bytes raise EncodeError {
   let width = img.width
   let height = img.height

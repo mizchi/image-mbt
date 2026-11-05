@@ -1,5 +1,5 @@
 ///|
-fn make_stream_test_image(width : Int, height : Int) -> ImageData {
+fn make_stream_test_image(width : Int32, height : Int32) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for y in 0..<height {
     for x in 0..<width {
@@ -10,11 +10,15 @@ fn make_stream_test_image(width : Int, height : Int) -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
-fn concat_rows(rows : Array[Bytes], width : Int, height : Int) -> Bytes raise {
+fn concat_rows(
+  rows : Array[Bytes],
+  width : Int32,
+  height : Int32,
+) -> Bytes raise {
   let total = width * height * 4
   let buf = FixedArray::make(total, b'\x00')
   let mut offset = 0
@@ -31,15 +35,15 @@ fn concat_rows(rows : Array[Bytes], width : Int, height : Int) -> Bytes raise {
 ///|
 test "decode_png_stream rows match decode_png" {
   let original = make_stream_test_image(8, 6)
-  let png = encode_png(original)
+  let png = @image.encode_png(original)
   let rows : Array[Bytes] = []
-  let ihdr = decode_png_stream(png, on_row=fn(_y, row) { rows.push(row) })
+  let ihdr = @image.decode_png_stream(png, on_row=fn(_y, row) { rows.push(row) })
   assert_eq(ihdr.width, 8)
   assert_eq(ihdr.height, 6)
   assert_eq(rows.length(), 6)
 
   let stream_data = concat_rows(rows, 8, 6)
-  let decoded = decode_png(png)
+  let decoded = @image.decode_png(png)
   assert_eq(decoded.width, 8)
   assert_eq(decoded.height, 6)
   assert_eq(stream_data, decoded.data)
@@ -47,7 +51,9 @@ test "decode_png_stream rows match decode_png" {
 
 ///|
 test "decode_png_stream invalid signature" {
-  try decode_png_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  }) catch {
+  try
+    @image.decode_png_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  })
+  catch {
     _ => ()
   } noraise {
     _ => fail("expected decode_png_stream to raise for invalid signature")

@@ -8,25 +8,28 @@ fn byte_array_to_bytes(arr : Array[Byte]) -> Bytes {
 }
 
 ///|
-fn read_u16le_at_for_test(data : Bytes, pos : Int) -> Int {
+fn read_u16le_at_for_test(data : Bytes, pos : Int32) -> Int32 {
   (data[pos].to_int() & 0xFF) | ((data[pos + 1].to_int() & 0xFF) << 8)
 }
 
 ///|
 priv struct GifTestBitReader {
   data : Bytes
-  mut pos : Int
-  mut bit_buf : Int
-  mut bits_count : Int
+  mut pos : Int32
+  mut bit_buf : Int32
+  mut bits_count : Int32
 }
 
 ///|
 fn GifTestBitReader::new(data : Bytes) -> GifTestBitReader {
-  { data, pos: 0, bit_buf: 0, bits_count: 0 }
+  { data, pos: 0, bit_buf: 0, bits_count: 0, }
 }
 
 ///|
-fn GifTestBitReader::read_bits(self : GifTestBitReader, count : Int) -> Int? {
+fn GifTestBitReader::read_bits(
+  self : GifTestBitReader,
+  count : Int32,
+) -> Int32? {
   while self.bits_count < count {
     if self.pos >= self.data.length() {
       return None
@@ -45,16 +48,16 @@ fn GifTestBitReader::read_bits(self : GifTestBitReader, count : Int) -> Int? {
 ///|
 fn decode_gif_lzw_for_test(
   data : Bytes,
-  min_code_size : Int,
-  expected_count : Int,
-) -> Array[Int] {
+  min_code_size : Int32,
+  expected_count : Int32,
+) -> Array[Int32] {
   let clear = 1 << min_code_size
   let eoi = clear + 1
   let prefixes = FixedArray::make(4096, -1)
   let suffixes = FixedArray::make(4096, 0)
   let stack = FixedArray::make(4096, 0)
   let reader = GifTestBitReader::new(data)
-  let output : Array[Int] = []
+  let output : Array[Int32] = []
 
   let mut code_size = min_code_size + 1
   let mut next_code = eoi + 1
@@ -109,7 +112,7 @@ fn decode_gif_lzw_for_test(
 }
 
 ///|
-fn collect_gif_sub_blocks_for_test(data : Bytes, pos : Int) -> (Bytes, Int) {
+fn collect_gif_sub_blocks_for_test(data : Bytes, pos : Int32) -> (Bytes, Int32) {
   let out : Array[Byte] = []
   let mut cursor = pos
   while true {
@@ -127,7 +130,7 @@ fn collect_gif_sub_blocks_for_test(data : Bytes, pos : Int) -> (Bytes, Int) {
 }
 
 ///|
-fn decode_gif_for_test(data : Bytes) -> ImageData raise {
+fn decode_gif_for_test(data : Bytes) -> @image.ImageData raise {
   assert_true(data.length() >= 20)
   assert_eq(data[0].to_int(), 0x47)
   assert_eq(data[1].to_int(), 0x49)
@@ -145,7 +148,7 @@ fn decode_gif_for_test(data : Bytes) -> ImageData raise {
   }
 
   let mut pos = palette_offset + color_table_size * 3
-  let mut transparent_index : Int? = None
+  let mut transparent_index : Int32? = None
   if data[pos].to_int() == 0x21 && data[pos + 1].to_int() == 0xF9 {
     assert_eq(data[pos + 2].to_int(), 0x04)
     let gce_packed = data[pos + 3].to_int() & 0xFF
@@ -190,29 +193,33 @@ fn decode_gif_for_test(data : Bytes) -> ImageData raise {
       }
     }
   }
-  { width, height, data: Bytes::from_array(rgba) }
+  { width, height, data: Bytes::from_array(rgba), }
 }
 
 ///|
-fn make_palette_test_image() -> ImageData {
+fn make_palette_test_image() -> @image.ImageData {
   let width = 4
   let height = 2
   let data = b"\xFF\x00\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\xFF\xFF\xFF\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\xFF\xFF\x00\x00\xFF\x00\xFF\x00\xFF"
-  { width, height, data }
+  { width, height, data, }
 }
 
 ///|
-fn make_transparent_test_image() -> ImageData {
+fn make_transparent_test_image() -> @image.ImageData {
   let width = 2
   let height = 2
   let data = b"\xFF\x00\x00\xFF\x00\x00\x00\x00\x00\xFF\x00\xFF\x00\x00\x00\x00"
-  { width, height, data }
+  { width, height, data, }
 }
 
 ///|
 test "gif_encode basic signature and trailer" {
-  let img : ImageData = { width: 1, height: 1, data: b"\xAA\xBB\xCC\xFF" }
-  let gif = encode_gif(img)
+  let img : @image.ImageData = {
+    width: 1,
+    height: 1,
+    data: b"\xAA\xBB\xCC\xFF",
+  }
+  let gif = @image.encode_gif(img)
   assert_eq(gif[0].to_int(), 0x47)
   assert_eq(gif[1].to_int(), 0x49)
   assert_eq(gif[2].to_int(), 0x46)
@@ -225,7 +232,7 @@ test "gif_encode basic signature and trailer" {
 ///|
 test "gif_encode palette roundtrip" {
   let original = make_palette_test_image()
-  let gif = encode_gif(original)
+  let gif = @image.encode_gif(original)
   let decoded = decode_gif_for_test(gif)
   assert_eq(decoded, original)
 }
@@ -233,26 +240,30 @@ test "gif_encode palette roundtrip" {
 ///|
 test "gif_encode transparent roundtrip" {
   let original = make_transparent_test_image()
-  let gif = encode_gif(original)
+  let gif = @image.encode_gif(original)
   let decoded = decode_gif_for_test(gif)
   assert_eq(decoded, original)
 }
 
 ///|
 test "gif_encode invalid dimensions and data length" {
-  let img_invalid_dim : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
-  try encode_gif(img_invalid_dim) catch {
+  let img_invalid_dim : @image.ImageData = {
+    width: 0,
+    height: 1,
+    data: Bytes::new(0),
+  }
+  try @image.encode_gif(img_invalid_dim) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_gif to raise for invalid dimensions")
   }
 
-  let img_invalid_data : ImageData = {
+  let img_invalid_data : @image.ImageData = {
     width: 2,
     height: 2,
     data: Bytes::new(4),
   }
-  try encode_gif(img_invalid_data) catch {
+  try @image.encode_gif(img_invalid_data) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_gif to raise for invalid data length")
@@ -261,8 +272,12 @@ test "gif_encode invalid dimensions and data length" {
 
 ///|
 test "gif_encode rejects partial alpha" {
-  let img : ImageData = { width: 1, height: 1, data: b"\x10\x20\x30\x80" }
-  try encode_gif(img) catch {
+  let img : @image.ImageData = {
+    width: 1,
+    height: 1,
+    data: b"\x10\x20\x30\x80",
+  }
+  try @image.encode_gif(img) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_gif to raise for partial alpha")
@@ -281,8 +296,8 @@ test "gif_encode rejects more than 256 colors" {
     buf[idx + 2] = b'\x00'
     buf[idx + 3] = b'\xFF'
   }
-  let img : ImageData = { width, height, data: Bytes::from_array(buf) }
-  try encode_gif(img) catch {
+  let img : @image.ImageData = { width, height, data: Bytes::from_array(buf), }
+  try @image.encode_gif(img) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_gif to raise for more than 256 colors")

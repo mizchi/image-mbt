@@ -1,4 +1,4 @@
 ///|
 test "package name" {
-  inspect(package_name(), content="mizchi/image-mbt")
+  inspect(@image.package_name(), content="mizchi/image-mbt")
 }

@@ -5,18 +5,18 @@
 ///|
 priv struct JpegBitReader {
   data : Bytes
-  mut pos : Int
-  mut bit_buf : Int
-  mut bits_left : Int
+  mut pos : Int32
+  mut bit_buf : Int32
+  mut bits_left : Int32
 }
 
 ///|
-fn JpegBitReader::new(data : Bytes, pos : Int) -> JpegBitReader {
-  { data, pos, bit_buf: 0, bits_left: 0 }
+fn JpegBitReader::new(data : Bytes, pos : Int32) -> JpegBitReader {
+  { data, pos, bit_buf: 0, bits_left: 0, }
 }
 
 ///|
-fn JpegBitReader::next_byte(self : JpegBitReader) -> Int raise DecodeError {
+fn JpegBitReader::next_byte(self : JpegBitReader) -> Int32 raise DecodeError {
   if self.pos >= self.data.length() {
     raise CorruptData("unexpected end of JPEG data")
   }
@@ -41,8 +41,8 @@ fn JpegBitReader::next_byte(self : JpegBitReader) -> Int raise DecodeError {
 ///|
 fn JpegBitReader::read_bits(
   self : JpegBitReader,
-  count : Int,
-) -> Int raise DecodeError {
+  count : Int32,
+) -> Int32 raise DecodeError {
   while self.bits_left < count {
     let b = self.next_byte()
     self.bit_buf = (self.bit_buf << 8) | b
@@ -54,23 +54,23 @@ fn JpegBitReader::read_bits(
 }
 
 ///|
-fn JpegBitReader::read_bit(self : JpegBitReader) -> Int raise DecodeError {
+fn JpegBitReader::read_bit(self : JpegBitReader) -> Int32 raise DecodeError {
   self.read_bits(1)
 }
 
 ///|
 priv struct HuffmanTable {
   // For each code length 1..16, store the symbols
-  min_code : FixedArray[Int] // min code value at each length
-  max_code : FixedArray[Int] // max code value at each length (-1 if none)
-  val_ptr : FixedArray[Int] // index into values for each length
-  values : Array[Int]
+  min_code : FixedArray[Int32] // min code value at each length
+  max_code : FixedArray[Int32] // max code value at each length (-1 if none)
+  val_ptr : FixedArray[Int32] // index into values for each length
+  values : Array[Int32]
 }
 
 ///|
 fn build_huffman_table(
-  bits : FixedArray[Int],
-  values : Array[Int],
+  bits : FixedArray[Int32],
+  values : Array[Int32],
 ) -> HuffmanTable {
   let min_code = FixedArray::make(17, 0)
   let max_code = FixedArray::make(17, -1)
@@ -87,14 +87,14 @@ fn build_huffman_table(
     }
     code = code << 1
   }
-  { min_code, max_code, val_ptr, values }
+  { min_code, max_code, val_ptr, values, }
 }
 
 ///|
 fn decode_huffman(
   br : JpegBitReader,
   table : HuffmanTable,
-) -> Int raise DecodeError {
+) -> Int32 raise DecodeError {
   let mut code = 0
   for length in 1..<=16 {
     code = (code << 1) | br.read_bit()
@@ -107,7 +107,7 @@ fn decode_huffman(
 }
 
 ///|
-fn receive_extend(br : JpegBitReader, nbits : Int) -> Int raise DecodeError {
+fn receive_extend(br : JpegBitReader, nbits : Int32) -> Int32 raise DecodeError {
   if nbits == 0 {
     return 0
   }
@@ -144,8 +144,13 @@ let idct_c : FixedArray[Double] = {
 }
 
 ///|
-// IDCT using pre-computed cosine table
-fn idct_block(coeff : FixedArray[Int], output : FixedArray[Int]) -> Unit {
+// IDCT using pre-computed cosine table (scalar reference).
+// Only referenced by tests on wasm, where the SIMD version is used.
+#warnings("-unused_value")
+fn idct_block_ref(
+  coeff : FixedArray[Int32],
+  output : FixedArray[Int32],
+) -> Unit {
   let tmp = FixedArray::make(64, 0.0)
   // First pass: columns
   for x in 0..<8 {
@@ -180,30 +185,30 @@ fn idct_block(coeff : FixedArray[Int], output : FixedArray[Int]) -> Unit {
 
 ///|
 priv struct JpegComponent {
-  id : Int
-  h_sample : Int
-  v_sample : Int
-  quant_id : Int
+  id : Int32
+  h_sample : Int32
+  v_sample : Int32
+  quant_id : Int32
 }
 
 ///|
 priv struct JpegFrameInfo {
-  width : Int
-  height : Int
+  width : Int32
+  height : Int32
   components : Array[JpegComponent]
-  max_h : Int
-  max_v : Int
+  max_h : Int32
+  max_v : Int32
 }
 
 ///|
 priv struct JpegScanComponent {
-  comp_idx : Int
-  dc_table_id : Int
-  ac_table_id : Int
+  comp_idx : Int32
+  dc_table_id : Int32
+  ac_table_id : Int32
 }
 
 ///|
-fn read_u16be_at(data : Bytes, pos : Int) -> Int {
+fn read_u16be_at(data : Bytes, pos : Int32) -> Int32 {
   ((data[pos].to_int() & 0xFF) << 8) | (data[pos + 1].to_int() & 0xFF)
 }
 
@@ -213,7 +218,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
     raise InvalidSignature("not a JPEG file")
   }
   let mut pos = 2
-  let quant_tables : FixedArray[FixedArray[Int]?] = FixedArray::make(4, None)
+  let quant_tables : FixedArray[FixedArray[Int32]?] = FixedArray::make(4, None)
   let dc_tables : FixedArray[HuffmanTable?] = FixedArray::make(4, None)
   let ac_tables : FixedArray[HuffmanTable?] = FixedArray::make(4, None)
   let mut frame_info : JpegFrameInfo? = None
@@ -299,9 +304,9 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         if v > max_v {
           max_v = v
         }
-        components.push({ id, h_sample: h, v_sample: v, quant_id: qid })
+        components.push({ id, h_sample: h, v_sample: v, quant_id: qid, })
       }
-      frame_info = Some({ width, height, components, max_h, max_v })
+      frame_info = Some({ width, height, components, max_h, max_v, })
     } else if marker == 0xC4 {
       // DHT - Define Huffman Table
       let mut hpos = pos + 2
@@ -318,7 +323,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
           total += bits[i]
         }
         hpos += 16
-        let values : Array[Int] = []
+        let values : Array[Int32] = []
         for i in 0..<total {
           values.push(data[hpos + i].to_int())
         }
@@ -375,7 +380,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   let mcu_rows = (fi.height + mcu_h - 1) / mcu_h
   // Allocate component buffers
   let ncomp = fi.components.length()
-  let comp_bufs : Array[FixedArray[Int]] = []
+  let comp_bufs : Array[FixedArray[Int32]] = []
   for i in 0..<ncomp {
     let c = fi.components[i]
     let cw = mcu_cols * c.h_sample * 8
@@ -510,11 +515,11 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       }
     }
   }
-  { width: fi.width, height: fi.height, data: Bytes::from_array(out_buf) }
+  { width: fi.width, height: fi.height, data: Bytes::from_array(out_buf), }
 }
 
 ///|
-fn clamp_byte(v : Int) -> Byte {
+fn clamp_byte(v : Int32) -> Byte {
   if v < 0 {
     b'\x00'
   } else if v > 255 {

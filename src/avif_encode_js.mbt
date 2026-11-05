@@ -13,8 +13,8 @@ fn image_has_non_opaque_alpha(img : ImageData) -> Bool {
 
 ///|
 extern "js" fn ffi_encode_avif_js(
-  width : Int,
-  height : Int,
+  width : Int32,
+  height : Int32,
   rgba : Bytes,
   png : Bytes,
 ) -> Bytes =

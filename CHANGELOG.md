@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+- Support the latest MoonBit toolchain (0.10.19+): `#derive`, explicit
+  `pub extend` method promotion, `@image.`-qualified black-box tests
+- Bump `mizchi/zlib` to `0.4.10` (older versions pull a `moonbitlang/x`
+  that the new `moon` rejects)
+- PNG decode: support every color type / bit depth combination (1/2/4-bit
+  indexed and grayscale, 16-bit), fix the scanline stride for sub-byte
+  depths, and apply `tRNS` for indexed (per-entry alpha), grayscale and
+  RGB (color key) images (#1)
+- Resize: bilinear / bicubic rewritten as a fixed-point separable
+  resampler (results within 1 of the previous implementation)
+- wasm SIMD: PNG Sub/Average/Paeth reconstruction and Average/Paeth/score
+  filtering, RGB/Gray/GrayAlpha -> RGBA expansion, JPEG FDCT/IDCT
+  (bit-identical f64x2) and resize kernels
+
 ## 0.4.0
 
 - Preserve `tRNS` alpha for indexed PNG decode

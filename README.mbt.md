@@ -4,16 +4,19 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 
 ## Features
 
-- **PNG** decode / encode (RGBA8, adaptive row filtering)
+- **PNG** decode (all color types and bit depths, `tRNS` transparency) / encode (RGBA8, adaptive row filtering)
 - **BMP** decode / encode
 - **JPEG** baseline decode / encode
 - **GIF** encode (single-frame, indexed palette, binary transparency)
 - **WebP** lossless encode (still image)
 - **ICO** encode (single-image, PNG payload)
 - **AVIF** encode (js target MVP, opaque still image)
-- **Resize** with Nearest / Bilinear / Bicubic interpolation
+- **Resize** with Nearest / Bilinear / Bicubic interpolation (fixed-point, separable)
+- **wasm SIMD** fast paths for PNG filters / color expansion, JPEG (I)DCT and resize on the `wasm` target
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
+
+On the `wasm` (linear memory) target, hot loops use 128-bit SIMD via inline WAT; other targets use scalar code that produces identical output. Requires a wasm runtime with SIMD support.
 
 ## Install
 
@@ -83,14 +86,14 @@ pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 
 | Feature | Decode | Encode | Targets | Notes |
 |---|---|---|---|---|
-| PNG | yes | yes | `js` / `native` / `wasm-gc` | RGBA8 normalize, stream decode |
-| BMP | yes | yes | `js` / `native` / `wasm-gc` | decode: 24/32-bit, encode: 32-bit BGRA |
-| JPEG | yes | yes | `js` / `native` / `wasm-gc` | baseline only |
-| GIF | no | yes | `js` / `native` / `wasm-gc` | single-frame, `<=256` colors, alpha `0/255` only |
-| WebP | no | yes | `js` / `native` / `wasm-gc` | lossless still-image encoder |
-| ICO | no | yes | `js` / `native` / `wasm-gc` | single PNG payload, `<=256x256` |
+| PNG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: grayscale / RGB / indexed / alpha at 1-16 bit, `tRNS`; RGBA8 normalize, stream decode (non-interlaced) |
+| BMP | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: 24/32-bit, encode: 32-bit BGRA |
+| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | baseline only |
+| GIF | no | yes | `js` / `native` / `wasm` / `wasm-gc` | single-frame, `<=256` colors, alpha `0/255` only |
+| WebP | no | yes | `js` / `native` / `wasm` / `wasm-gc` | lossless still-image encoder |
+| ICO | no | yes | `js` / `native` / `wasm` / `wasm-gc` | single PNG payload, `<=256x256` |
 | AVIF | no | yes | `js` | opaque images only, requires browser AVIF canvas support or local `ffmpeg` |
-| Resize | n/a | n/a | `js` / `native` / `wasm-gc` | Nearest / Bilinear / Bicubic |
+| Resize | n/a | n/a | `js` / `native` / `wasm` / `wasm-gc` | Nearest / Bilinear / Bicubic |
 
 ## License
 

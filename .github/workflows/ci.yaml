@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [js, native]
+        target: [js, native, wasm, wasm-gc]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

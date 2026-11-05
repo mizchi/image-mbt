@@ -19,15 +19,15 @@ fn is_bmp_signature(raw : Bytes) -> Bool {
 ///|
 pub fn decode_image_stream(
   raw : Bytes,
-  on_row~ : (Int, Bytes) -> Unit,
+  on_row~ : (Int32, Bytes) -> Unit,
 ) -> StreamImageInfo raise DecodeError {
   if is_png_signature(raw) {
     let ihdr = decode_png_stream(raw, on_row~)
-    return { format: Png, width: ihdr.width, height: ihdr.height }
+    return { format: Png, width: ihdr.width, height: ihdr.height, }
   }
   if is_bmp_signature(raw) {
     let (width, height) = decode_bmp_stream(raw, on_row~)
-    return { format: Bmp, width, height }
+    return { format: Bmp, width, height, }
   }
   raise InvalidSignature("unknown image format")
 }

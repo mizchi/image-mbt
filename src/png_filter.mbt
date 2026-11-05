@@ -1,5 +1,5 @@
 ///|
-fn paeth_predictor(a : Int, b : Int, c : Int) -> Int {
+fn paeth_predictor(a : Int32, b : Int32, c : Int32) -> Int32 {
   let p = a + b - c
   let pa = if p > a { p - a } else { a - p }
   let pb = if p > b { p - b } else { b - p }
@@ -14,37 +14,122 @@ fn paeth_predictor(a : Int, b : Int, c : Int) -> Int {
 }
 
 ///|
+/// Scalar Sub reconstruction for bytes `start ..< end`.
+fn reconstruct_sub_range(
+  row : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+  start : Int32,
+  end : Int32,
+) -> Unit {
+  for i in start..<end {
+    let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
+    buf[i] = (row[i].to_int() + a).to_byte()
+  }
+}
+
+///|
+/// Scalar Average reconstruction for bytes `start ..< end`.
+fn reconstruct_average_range(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+  start : Int32,
+  end : Int32,
+) -> Unit {
+  for i in start..<end {
+    let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
+    let b = prev[i].to_int()
+    buf[i] = (row[i].to_int() + (a + b) / 2).to_byte()
+  }
+}
+
+///|
+/// Scalar Paeth reconstruction for bytes `start ..< end`.
+fn reconstruct_paeth_range(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+  start : Int32,
+  end : Int32,
+) -> Unit {
+  for i in start..<end {
+    let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
+    let b = prev[i].to_int()
+    let c = if i >= bpp { prev[i - bpp].to_int() } else { 0 }
+    buf[i] = (row[i].to_int() + paeth_predictor(a, b, c)).to_byte()
+  }
+}
+
+///|
+/// Scalar Average filter (encode side) for bytes `start ..< end`.
+fn apply_average_range(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+  start : Int32,
+  end : Int32,
+) -> Unit {
+  for i in start..<end {
+    let a = if i >= bpp { row[i - bpp].to_int() } else { 0 }
+    let b = prev[i].to_int()
+    buf[i] = (row[i].to_int() - (a + b) / 2).to_byte()
+  }
+}
+
+///|
+/// Scalar Paeth filter (encode side) for bytes `start ..< end`.
+fn apply_paeth_range(
+  row : Bytes,
+  prev : Bytes,
+  buf : FixedArray[Byte],
+  bpp : Int32,
+  start : Int32,
+  end : Int32,
+) -> Unit {
+  for i in start..<end {
+    let a = if i >= bpp { row[i - bpp].to_int() } else { 0 }
+    let b = prev[i].to_int()
+    let c = if i >= bpp { prev[i - bpp].to_int() } else { 0 }
+    buf[i] = (row[i].to_int() - paeth_predictor(a, b, c)).to_byte()
+  }
+}
+
+///|
+/// Scalar filter-selection score (sum of |signed byte|) for `start ..< end`.
+fn filter_sum_range(
+  buf : FixedArray[Byte],
+  start : Int32,
+  end : Int32,
+) -> Int32 {
+  let mut sum = 0
+  for i in start..<end {
+    let v = buf[i].to_int()
+    sum += if v < 128 { v } else { 256 - v }
+  }
+  sum
+}
+
+///|
 /// Reconstruct a filtered scanline (decode side).
 /// `filter_type`: 0=None, 1=Sub, 2=Up, 3=Average, 4=Paeth
 fn reconstruct_row(
-  filter_type : Int,
+  filter_type : Int32,
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
+  bpp : Int32,
 ) -> Bytes raise DecodeError {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
   match filter_type {
     0 => buf.blit_from_bytes(0, row, 0, len)
-    1 =>
-      for i in 0..<len {
-        let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
-        buf[i] = ((row[i].to_int() + a) % 256).to_byte()
-      }
+    1 => reconstruct_filter_sub_impl(row, buf, bpp)
     2 => reconstruct_filter_up_impl(row, prev, buf)
-    3 =>
-      for i in 0..<len {
-        let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
-        let b = prev[i].to_int()
-        buf[i] = ((row[i].to_int() + (a + b) / 2) % 256).to_byte()
-      }
-    4 =>
-      for i in 0..<len {
-        let a = if i >= bpp { buf[i - bpp].to_int() } else { 0 }
-        let b = prev[i].to_int()
-        let c = if i >= bpp { prev[i - bpp].to_int() } else { 0 }
-        buf[i] = ((row[i].to_int() + paeth_predictor(a, b, c)) % 256).to_byte()
-      }
+    3 => reconstruct_filter_average_impl(row, prev, buf, bpp)
+    4 => reconstruct_filter_paeth_impl(row, prev, buf, bpp)
     _ => raise CorruptData("unknown filter type: " + filter_type.to_string())
   }
   Bytes::from_array(buf)
@@ -54,7 +139,7 @@ fn reconstruct_row(
 fn apply_filter_none(
   row : Bytes,
   _prev : Bytes,
-  _bpp : Int,
+  _bpp : Int32,
 ) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
@@ -63,12 +148,16 @@ fn apply_filter_none(
 }
 
 ///|
-fn apply_filter_sub(row : Bytes, _prev : Bytes, bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_sub(
+  row : Bytes,
+  _prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
   apply_filter_sub_impl(row, bpp)
 }
 
 ///|
-fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int32) -> FixedArray[Byte] {
   apply_filter_up_impl(row, prev)
 }
 
@@ -76,49 +165,31 @@ fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int) -> FixedArray[Byte] {
 fn apply_filter_average(
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
+  bpp : Int32,
 ) -> FixedArray[Byte] {
-  let len = row.length()
-  let buf = FixedArray::make(len, b'\x00')
-  for i in 0..<len {
-    let raw_val = row[i].to_int()
-    let a = if i >= bpp { row[i - bpp].to_int() } else { 0 }
-    let b = prev[i].to_int()
-    buf[i] = ((raw_val - (a + b) / 2 + 256) % 256).to_byte()
-  }
-  buf
+  apply_filter_average_impl(row, prev, bpp)
 }
 
 ///|
-fn apply_filter_paeth(row : Bytes, prev : Bytes, bpp : Int) -> FixedArray[Byte] {
-  let len = row.length()
-  let buf = FixedArray::make(len, b'\x00')
-  for i in 0..<len {
-    let raw_val = row[i].to_int()
-    let a = if i >= bpp { row[i - bpp].to_int() } else { 0 }
-    let b = prev[i].to_int()
-    let c = if i >= bpp { prev[i - bpp].to_int() } else { 0 }
-    buf[i] = ((raw_val - paeth_predictor(a, b, c) + 256) % 256).to_byte()
-  }
-  buf
+fn apply_filter_paeth(
+  row : Bytes,
+  prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
+  apply_filter_paeth_impl(row, prev, bpp)
 }
 
 ///|
-fn filter_sum(buf : FixedArray[Byte]) -> Int {
-  let mut sum = 0
-  for i in 0..<buf.length() {
-    let v = buf[i].to_int()
-    sum += if v < 128 { v } else { 256 - v }
-  }
-  sum
+fn filter_sum(buf : FixedArray[Byte]) -> Int32 {
+  filter_sum_impl(buf)
 }
 
 ///|
 fn select_best_filter(
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
-) -> (Int, FixedArray[Byte]) {
+  bpp : Int32,
+) -> (Int32, FixedArray[Byte]) {
   let f0 = apply_filter_none(row, prev, bpp)
   let mut best_type = 0
   let mut best_sum = filter_sum(f0)

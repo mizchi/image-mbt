@@ -1,5 +1,8 @@
 ///|
-fn make_bmp_stream_test_image(width : Int, height : Int) -> ImageData {
+fn make_bmp_stream_test_image(
+  width : Int32,
+  height : Int32,
+) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for y in 0..<height {
     for x in 0..<width {
@@ -10,14 +13,14 @@ fn make_bmp_stream_test_image(width : Int, height : Int) -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
 fn concat_bmp_rows(
   rows : Array[Bytes],
-  width : Int,
-  height : Int,
+  width : Int32,
+  height : Int32,
 ) -> Bytes raise {
   let total = width * height * 4
   let buf = FixedArray::make(total, b'\x00')
@@ -35,9 +38,9 @@ fn concat_bmp_rows(
 ///|
 test "decode_bmp_stream rows match decode_bmp" {
   let original = make_bmp_stream_test_image(8, 6)
-  let bmp = encode_bmp(original)
+  let bmp = @image.encode_bmp(original)
   let rows : Array[Bytes] = []
-  let (width, height) = decode_bmp_stream(bmp, on_row=fn(_y, row) {
+  let (width, height) = @image.decode_bmp_stream(bmp, on_row=fn(_y, row) {
     rows.push(row)
   })
   assert_eq(width, 8)
@@ -45,7 +48,7 @@ test "decode_bmp_stream rows match decode_bmp" {
   assert_eq(rows.length(), 6)
 
   let stream_data = concat_bmp_rows(rows, 8, 6)
-  let decoded = decode_bmp(bmp)
+  let decoded = @image.decode_bmp(bmp)
   assert_eq(stream_data, decoded.data)
 }
 
@@ -81,7 +84,7 @@ test "decode_bmp_stream top_down row order" {
 
   let bmp = Bytes::from_array(buf)
   let rows : Array[Bytes] = []
-  let (width, height) = decode_bmp_stream(bmp, on_row=fn(_y, row) {
+  let (width, height) = @image.decode_bmp_stream(bmp, on_row=fn(_y, row) {
     rows.push(row)
   })
   assert_eq(width, 1)
@@ -95,7 +98,9 @@ test "decode_bmp_stream top_down row order" {
 
 ///|
 test "decode_bmp_stream invalid signature" {
-  try decode_bmp_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  }) catch {
+  try
+    @image.decode_bmp_stream(b"\x00\x00\x00\x00", on_row=fn(_, _) {  })
+  catch {
     _ => ()
   } noraise {
     _ => fail("expected decode_bmp_stream to raise for invalid signature")

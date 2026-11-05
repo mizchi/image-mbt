@@ -1,26 +1,26 @@
 ///|
-let webp_code_length_code_order : FixedArray[Int] = [
+let webp_code_length_code_order : FixedArray[Int32] = [
   17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ]
 
 ///|
 priv struct WebPBitWriter {
   buf : Array[Byte]
-  mut bit_buf : Int
-  mut bits_count : Int
+  mut bit_buf : Int32
+  mut bits_count : Int32
 }
 
 ///|
 priv struct WebPPrefixCode {
-  lengths : FixedArray[Int]
-  codes : FixedArray[Int]
-  single_symbol : Int?
+  lengths : FixedArray[Int32]
+  codes : FixedArray[Int32]
+  single_symbol : Int32?
 }
 
 ///|
 priv struct WebPEncodingPlan {
   subtract_green : Bool
-  color_cache_bits : Int
+  color_cache_bits : Int32
   green_code : WebPPrefixCode
   red_code : WebPPrefixCode
   blue_code : WebPPrefixCode
@@ -29,14 +29,14 @@ priv struct WebPEncodingPlan {
 
 ///|
 fn WebPBitWriter::new() -> WebPBitWriter {
-  { buf: [], bit_buf: 0, bits_count: 0 }
+  { buf: [], bit_buf: 0, bits_count: 0, }
 }
 
 ///|
 fn WebPBitWriter::put_bits(
   self : WebPBitWriter,
-  value : Int,
-  count : Int,
+  value : Int32,
+  count : Int32,
 ) -> Unit {
   if count <= 0 {
     return
@@ -70,7 +70,7 @@ fn WebPBitWriter::to_bytes(self : WebPBitWriter) -> Bytes {
 }
 
 ///|
-fn webp_reverse_bits(value : Int, count : Int) -> Int {
+fn webp_reverse_bits(value : Int32, count : Int32) -> Int32 {
   let mut out = 0
   let mut v = value
   for _ in 0..<count {
@@ -81,7 +81,7 @@ fn webp_reverse_bits(value : Int, count : Int) -> Int {
 }
 
 ///|
-fn webp_floor_log2(value : Int) -> Int {
+fn webp_floor_log2(value : Int32) -> Int32 {
   let mut v = value
   let mut out = -1
   while v > 0 {
@@ -92,18 +92,18 @@ fn webp_floor_log2(value : Int) -> Int {
 }
 
 ///|
-fn webp_pack_argb(r : Int, g : Int, b : Int, a : Int) -> Int {
+fn webp_pack_argb(r : Int32, g : Int32, b : Int32, a : Int32) -> Int32 {
   (a << 24) | (r << 16) | (g << 8) | b
 }
 
 ///|
-fn webp_color_cache_index(color : Int, bits : Int) -> Int {
+fn webp_color_cache_index(color : Int32, bits : Int32) -> Int32 {
   let hash = (color * 0x1E35A7BD) >> (32 - bits)
   hash & ((1 << bits) - 1)
 }
 
 ///|
-fn webp_prefix_code_from_lengths(lengths : FixedArray[Int]) -> WebPPrefixCode {
+fn webp_prefix_code_from_lengths(lengths : FixedArray[Int32]) -> WebPPrefixCode {
   let codes = FixedArray::make(lengths.length(), 0)
   let mut used_count = 0
   let mut single_symbol = -1
@@ -146,13 +146,13 @@ fn webp_prefix_code_from_lengths(lengths : FixedArray[Int]) -> WebPPrefixCode {
       next_code[len] += 1
     }
   }
-  { lengths, codes, single_symbol: None }
+  { lengths, codes, single_symbol: None, }
 }
 
 ///|
-fn webp_build_prefix_code(freqs : FixedArray[Int]) -> WebPPrefixCode {
+fn webp_build_prefix_code(freqs : FixedArray[Int32]) -> WebPPrefixCode {
   let lengths = FixedArray::make(freqs.length(), 0)
-  let symbols : Array[(Int, Int)] = []
+  let symbols : Array[(Int32, Int32)] = []
   for symbol in 0..<freqs.length() {
     let freq = freqs[symbol]
     if freq > 0 {
@@ -188,8 +188,8 @@ fn webp_build_prefix_code(freqs : FixedArray[Int]) -> WebPPrefixCode {
 }
 
 ///|
-fn webp_prefix_used_symbols(prefix : WebPPrefixCode) -> Array[Int] {
-  let out : Array[Int] = []
+fn webp_prefix_used_symbols(prefix : WebPPrefixCode) -> Array[Int32] {
+  let out : Array[Int32] = []
   for symbol in 0..<prefix.lengths.length() {
     if prefix.lengths[symbol] > 0 {
       out.push(symbol)
@@ -199,7 +199,7 @@ fn webp_prefix_used_symbols(prefix : WebPPrefixCode) -> Array[Int] {
 }
 
 ///|
-fn webp_prefix_max_symbol(prefix : WebPPrefixCode) -> Int {
+fn webp_prefix_max_symbol(prefix : WebPPrefixCode) -> Int32 {
   let mut max_symbol = 1
   for symbol in 0..<prefix.lengths.length() {
     if prefix.lengths[symbol] > 0 {
@@ -210,7 +210,7 @@ fn webp_prefix_max_symbol(prefix : WebPPrefixCode) -> Int {
 }
 
 ///|
-fn webp_choose_length_nbits(max_symbol : Int) -> Int {
+fn webp_choose_length_nbits(max_symbol : Int32) -> Int32 {
   if max_symbol <= 5 {
     2
   } else if max_symbol <= 17 {
@@ -234,7 +234,7 @@ fn webp_choose_length_nbits(max_symbol : Int) -> Int {
 fn webp_write_symbol(
   bw : WebPBitWriter,
   prefix : WebPPrefixCode,
-  symbol : Int,
+  symbol : Int32,
 ) -> Unit {
   match prefix.single_symbol {
     Some(expected) => ignore(expected)
@@ -271,7 +271,7 @@ fn encode_webp_normal_prefix_code(
 ) -> Unit {
   let max_symbol = webp_prefix_max_symbol(prefix)
   let token_freqs = FixedArray::make(19, 0)
-  let tokens : Array[Int] = []
+  let tokens : Array[Int32] = []
   for symbol in 0..<max_symbol {
     let token = prefix.lengths[symbol]
     tokens.push(token)
@@ -313,9 +313,9 @@ fn encode_webp_prefix_code(bw : WebPBitWriter, prefix : WebPPrefixCode) -> Unit 
 
 ///|
 fn webp_estimate_data_bits(
-  freqs : FixedArray[Int],
+  freqs : FixedArray[Int32],
   prefix : WebPPrefixCode,
-) -> Int {
+) -> Int32 {
   match prefix.single_symbol {
     Some(_) => 0
     None => {
@@ -335,8 +335,13 @@ fn webp_estimate_data_bits(
 fn webp_collect_channel_freqs(
   img : ImageData,
   subtract_green : Bool,
-  color_cache_bits : Int,
-) -> (FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) {
+  color_cache_bits : Int32,
+) -> (
+  FixedArray[Int32],
+  FixedArray[Int32],
+  FixedArray[Int32],
+  FixedArray[Int32],
+) {
   let green_alphabet_size = if color_cache_bits > 0 {
     256 + 24 + (1 << color_cache_bits)
   } else {
@@ -400,8 +405,8 @@ fn webp_collect_channel_freqs(
 fn webp_build_plan_candidate(
   img : ImageData,
   subtract_green : Bool,
-  color_cache_bits : Int,
-) -> (WebPEncodingPlan, Int) {
+  color_cache_bits : Int32,
+) -> (WebPEncodingPlan, Int32) {
   let (green_freqs, red_freqs, blue_freqs, alpha_freqs) = webp_collect_channel_freqs(
     img, subtract_green, color_cache_bits,
   )

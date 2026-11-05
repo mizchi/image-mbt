@@ -1,11 +1,11 @@
 ///|
 fn make_solid_image(
-  width : Int,
-  height : Int,
-  r : Int,
-  g : Int,
-  b : Int,
-) -> ImageData {
+  width : Int32,
+  height : Int32,
+  r : Int32,
+  g : Int32,
+  b : Int32,
+) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for i in 0..<(width * height) {
     let idx = i * 4
@@ -14,11 +14,11 @@ fn make_solid_image(
     buf[idx + 2] = b.to_byte()
     buf[idx + 3] = b'\xFF'
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
-fn make_gradient_image(width : Int, height : Int) -> ImageData {
+fn make_gradient_image(width : Int32, height : Int32) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for y in 0..<height {
     for x in 0..<width {
@@ -32,14 +32,14 @@ fn make_gradient_image(width : Int, height : Int) -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
 fn assert_image_rgb_close(
-  actual : ImageData,
-  expected : ImageData,
-  tol : Int,
+  actual : @image.ImageData,
+  expected : @image.ImageData,
+  tol : Int32,
 ) -> Unit raise {
   assert_eq(actual.width, expected.width)
   assert_eq(actual.height, expected.height)
@@ -59,42 +59,46 @@ fn assert_image_rgb_close(
 ///|
 test "jpeg_encode 8x8 solid roundtrip" {
   let original = make_solid_image(8, 8, 220, 40, 90)
-  let jpeg = encode_jpeg(original, quality=95)
-  let decoded = decode_jpeg(jpeg)
+  let jpeg = @image.encode_jpeg(original, quality=95)
+  let decoded = @image.decode_jpeg(jpeg)
   assert_image_rgb_close(decoded, original, 3)
 }
 
 ///|
 test "jpeg_encode 16x16 gradient roundtrip" {
   let original = make_gradient_image(16, 16)
-  let jpeg = encode_jpeg(original, quality=90)
-  let decoded = decode_jpeg(jpeg)
+  let jpeg = @image.encode_jpeg(original, quality=90)
+  let decoded = @image.decode_jpeg(jpeg)
   assert_image_rgb_close(decoded, original, 20)
 }
 
 ///|
 test "jpeg_encode non 8 multiple roundtrip" {
   let original = make_gradient_image(10, 10)
-  let jpeg = encode_jpeg(original, quality=90)
-  let decoded = decode_jpeg(jpeg)
+  let jpeg = @image.encode_jpeg(original, quality=90)
+  let decoded = @image.decode_jpeg(jpeg)
   assert_image_rgb_close(decoded, original, 20)
 }
 
 ///|
 test "jpeg_encode invalid dimensions and data length" {
-  let img_invalid_dim : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
-  try encode_jpeg(img_invalid_dim) catch {
+  let img_invalid_dim : @image.ImageData = {
+    width: 0,
+    height: 1,
+    data: Bytes::new(0),
+  }
+  try @image.encode_jpeg(img_invalid_dim) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_jpeg to raise for invalid dimensions")
   }
 
-  let img_invalid_data : ImageData = {
+  let img_invalid_data : @image.ImageData = {
     width: 2,
     height: 2,
     data: Bytes::new(4),
   }
-  try encode_jpeg(img_invalid_data) catch {
+  try @image.encode_jpeg(img_invalid_data) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_jpeg to raise for invalid data length")
@@ -104,7 +108,7 @@ test "jpeg_encode invalid dimensions and data length" {
 ///|
 test "jpeg_encode quality affects file size" {
   let img = make_gradient_image(32, 32)
-  let jpeg_q10 = encode_jpeg(img, quality=10)
-  let jpeg_q95 = encode_jpeg(img, quality=95)
+  let jpeg_q10 = @image.encode_jpeg(img, quality=10)
+  let jpeg_q95 = @image.encode_jpeg(img, quality=95)
   assert_true(jpeg_q10.length() < jpeg_q95.length())
 }

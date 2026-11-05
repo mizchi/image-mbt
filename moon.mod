@@ -1,9 +1,9 @@
 name = "mizchi/image"
 
-version = "0.4.3"
+version = "0.5.0"
 
 import {
-  "mizchi/zlib@0.4.8",
+  "mizchi/zlib@0.4.10",
 }
 
 readme = "README.mbt.md"

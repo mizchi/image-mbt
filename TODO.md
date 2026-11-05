@@ -2,7 +2,7 @@
 
 ## Done
 
-- [x] PNG decoder (IHDR/PLTE/IDAT/IEND, all color types)
+- [x] PNG decoder (IHDR/PLTE/tRNS/IDAT/IEND, all color types and bit depths)
 - [x] PNG encoder (RGBA8, adaptive row filtering)
 - [x] zlib/deflate integration (`mizchi/zlib`)
 - [x] Color type conversion to RGBA8
@@ -17,6 +17,8 @@
 - [x] AVIF encoder (js-target MVP, opaque images)
 
 ## Next
+
+- [ ] PNG interlaced (Adam7) decode
 
 - [x] JPEG encoder
 - [ ] WebP decode

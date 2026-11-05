@@ -8,7 +8,7 @@ test "zlib roundtrip" {
 
 ///|
 test "ImageData creation" {
-  let img : ImageData = { width: 2, height: 2, data: Bytes::new(16) }
+  let img : @image.ImageData = { width: 2, height: 2, data: Bytes::new(16), }
   assert_eq(img.width, 2)
   assert_eq(img.height, 2)
   assert_eq(img.data.length(), 16)
