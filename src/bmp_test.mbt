@@ -140,7 +140,7 @@ test "decode_bmp unsupported bpp" {
   buf[18] = (1).to_byte()
   buf[22] = (1).to_byte()
   buf[26] = (1).to_byte()
-  buf[28] = (16).to_byte() // 16-bit not supported
+  buf[28] = (64).to_byte() // 64-bit not supported
   let bmp = Bytes::from_array(buf)
   let mut got_error = false
   try {
