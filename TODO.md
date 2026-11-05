@@ -9,8 +9,8 @@
 - [x] Error model and diagnostics (`DecodeError` / `EncodeError`)
 - [x] Engine-ready `ImageData` contract
 - [x] Golden tests with fixture corpus
-- [x] JPEG baseline decode
-- [x] BMP decode / encode (24-bit uncompressed)
+- [x] JPEG baseline / extended sequential decode (restart markers)
+- [x] BMP decode (palette, RLE, 16/24/32-bit, bit fields) / encode
 - [x] Image resize (Nearest / Bilinear / Bicubic)
 - [x] GIF encoder (single-frame)
 - [x] ICO encoder (single-image, PNG payload)
@@ -18,7 +18,11 @@
 
 ## Next
 
-- [ ] PNG interlaced (Adam7) decode
+- [x] PNG interlaced (Adam7) decode
+- [x] ICO decode + format auto-detect (`decode_image`)
+- [ ] JPEG progressive decode
+- [ ] GIF decode
+
 
 - [x] JPEG encoder
 - [ ] WebP decode
