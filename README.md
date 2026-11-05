@@ -6,7 +6,7 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 
 - **PNG** decode (all color types and bit depths, `tRNS` transparency, Adam7 interlace) / encode (RGBA8, adaptive row filtering)
 - **BMP** decode (1/2/4/8-bit palette, RLE4/RLE8, 16/24/32-bit, bit fields) / encode
-- **JPEG** sequential (baseline / extended) decode with restart markers / baseline encode
+- **JPEG** baseline / extended sequential / progressive decode with restart markers / baseline encode
 - **GIF** encode (single-frame, indexed palette, binary transparency)
 - **WebP** lossless encode (still image)
 - **ICO** decode (PNG / BMP payloads, AND mask) / encode (single-image, PNG payload)
@@ -94,7 +94,7 @@ pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 |---|---|---|---|---|
 | PNG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: grayscale / RGB / indexed / alpha at 1-16 bit, `tRNS`, Adam7; RGBA8 normalize, stream decode |
 | BMP | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: 1/2/4/8/16/24/32-bit, RLE4/RLE8, bit fields, V2-V5 / OS/2 headers; encode: 32-bit BGRA |
-| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential (8-bit), restart markers; no progressive |
+| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan |
 | GIF | no | yes | `js` / `native` / `wasm` / `wasm-gc` | single-frame, `<=256` colors, alpha `0/255` only |
 | WebP | no | yes | `js` / `native` / `wasm` / `wasm-gc` | lossless still-image encoder |
 | ICO | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: ICO/CUR, PNG or BMP payloads with AND mask; encode: single PNG payload, `<=256x256` |

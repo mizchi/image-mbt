@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+- JPEG decode: progressive (SOF2) images, including spectral selection
+  and successive approximation (DC/AC first and refinement scans) and
+  restart markers
+- JPEG decode: decode every scan of sequential files, so baseline images
+  with one scan per component now decode (previously only the first scan
+  was read)
+
 ## 0.6.0
 
 - JPEG decode: restart intervals (DRI/RST), SOF1 extended sequential,

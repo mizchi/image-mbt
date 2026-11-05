@@ -20,7 +20,7 @@
 
 - [x] PNG interlaced (Adam7) decode
 - [x] ICO decode + format auto-detect (`decode_image`)
-- [ ] JPEG progressive decode
+- [x] JPEG progressive decode
 - [ ] GIF decode
 
 
