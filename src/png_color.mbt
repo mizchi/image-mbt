@@ -4,7 +4,7 @@
 fn scanline_to_rgba(
   row : Bytes,
   color_type : ColorType,
-  bit_depth : Int,
+  bit_depth : Int32,
   palette : Bytes?,
   palette_alpha : Bytes?,
 ) -> Bytes raise DecodeError {

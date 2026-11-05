@@ -1,5 +1,5 @@
 ///|
-fn read_u32le(data : Bytes, offset : Int) -> UInt {
+fn read_u32le(data : Bytes, offset : Int32) -> UInt32 {
   let b0 = data[offset].to_int() & 0xFF
   let b1 = data[offset + 1].to_int() & 0xFF
   let b2 = data[offset + 2].to_int() & 0xFF
@@ -8,7 +8,7 @@ fn read_u32le(data : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn read_i32le(data : Bytes, offset : Int) -> Int {
+fn read_i32le(data : Bytes, offset : Int32) -> Int32 {
   let b0 = data[offset].to_int() & 0xFF
   let b1 = data[offset + 1].to_int() & 0xFF
   let b2 = data[offset + 2].to_int() & 0xFF
@@ -17,7 +17,7 @@ fn read_i32le(data : Bytes, offset : Int) -> Int {
 }
 
 ///|
-fn read_u16le(data : Bytes, offset : Int) -> Int {
+fn read_u16le(data : Bytes, offset : Int32) -> Int32 {
   let b0 = data[offset].to_int() & 0xFF
   let b1 = data[offset + 1].to_int() & 0xFF
   (b1 << 8) | b0
@@ -25,12 +25,12 @@ fn read_u16le(data : Bytes, offset : Int) -> Int {
 
 ///|
 priv struct BmpDecodeInfo {
-  width : Int
-  height : Int
-  bpp : Int
-  bytes_per_px : Int
-  pixel_offset : Int
-  padded_row_size : Int
+  width : Int32
+  height : Int32
+  bpp : Int32
+  bytes_per_px : Int32
+  pixel_offset : Int32
+  padded_row_size : Int32
   top_down : Bool
 }
 
@@ -78,14 +78,14 @@ fn parse_bmp_info(raw : Bytes) -> BmpDecodeInfo raise DecodeError {
     raise CorruptData("BMP file too short for pixel data")
   }
 
-  { width, height, bpp, bytes_per_px, pixel_offset, padded_row_size, top_down }
+  { width, height, bpp, bytes_per_px, pixel_offset, padded_row_size, top_down, }
 }
 
 ///|
 fn decode_bmp_rows(
   raw : Bytes,
   info : BmpDecodeInfo,
-  on_row : (Int, Bytes) -> Unit,
+  on_row : (Int32, Bytes) -> Unit,
 ) -> Unit {
   for y in 0..<info.height {
     let src_y = if info.top_down { y } else { info.height - 1 - y }
@@ -110,8 +110,8 @@ fn decode_bmp_rows(
 ///|
 pub fn decode_bmp_stream(
   raw : Bytes,
-  on_row~ : (Int, Bytes) -> Unit,
-) -> (Int, Int) raise DecodeError {
+  on_row~ : (Int32, Bytes) -> Unit,
+) -> (Int32, Int32) raise DecodeError {
   let info = parse_bmp_info(raw)
   decode_bmp_rows(raw, info, on_row)
   (info.width, info.height)
@@ -125,5 +125,5 @@ pub fn decode_bmp(raw : Bytes) -> ImageData raise DecodeError {
     let dst_offset = y * info.width * 4
     rgba_buf.blit_from_bytes(dst_offset, row, 0, info.width * 4)
   })
-  { width: info.width, height: info.height, data: Bytes::from_array(rgba_buf) }
+  { width: info.width, height: info.height, data: Bytes::from_array(rgba_buf), }
 }

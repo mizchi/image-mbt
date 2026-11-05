@@ -1,49 +1,55 @@
 ///|
+#derive(Eq)
 pub(all) enum ResizeMethod {
   Nearest
   Bilinear
   Bicubic
-} derive(Eq)
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub(all) struct ImageData {
-  width : Int
-  height : Int
+  width : Int32
+  height : Int32
   data : Bytes
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub enum ColorType {
   Grayscale
   Rgb
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct IhdrData {
-  width : Int
-  height : Int
-  bit_depth : Int
+  width : Int32
+  height : Int32
+  bit_depth : Int32
   color_type : ColorType
-  compression : Int
-  filter : Int
-  interlace : Int
-} derive(Eq)
+  compression : Int32
+  filter : Int32
+  interlace : Int32
+}
 
 ///|
+#derive(Eq, @debug.Debug)
 pub(all) enum ImageFormat {
   Png
   Bmp
-} derive(Eq, @debug.Debug)
+}
 
 ///|
+#derive(Eq)
 pub(all) struct StreamImageInfo {
   format : ImageFormat
-  width : Int
-  height : Int
-} derive(Eq)
+  width : Int32
+  height : Int32
+}
 
 ///|
 pub impl Show for ResizeMethod with fn output(self, logger) {
@@ -155,7 +161,7 @@ pub impl Show for EncodeError with fn output(self, logger) {
 }
 
 ///|
-fn color_type_from_png(value : Int) -> ColorType raise DecodeError {
+fn color_type_from_png(value : Int32) -> ColorType raise DecodeError {
   match value {
     0 => Grayscale
     2 => Rgb
@@ -167,7 +173,7 @@ fn color_type_from_png(value : Int) -> ColorType raise DecodeError {
 }
 
 ///|
-fn color_type_to_png(ct : ColorType) -> Int {
+fn color_type_to_png(ct : ColorType) -> Int32 {
   match ct {
     Grayscale => 0
     Rgb => 2
@@ -178,7 +184,7 @@ fn color_type_to_png(ct : ColorType) -> Int {
 }
 
 ///|
-fn bytes_per_pixel(ct : ColorType, bit_depth : Int) -> Int {
+fn bytes_per_pixel(ct : ColorType, bit_depth : Int32) -> Int32 {
   let channels = match ct {
     Grayscale => 1
     Rgb => 3

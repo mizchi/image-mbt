@@ -1,5 +1,5 @@
 ///|
-fn write_u32be(buf : FixedArray[Byte], offset : Int, value : UInt) -> Unit {
+fn write_u32be(buf : FixedArray[Byte], offset : Int32, value : UInt32) -> Unit {
   buf[offset] = (value >> 24).land(0xFFU).to_byte()
   buf[offset + 1] = (value >> 16).land(0xFFU).to_byte()
   buf[offset + 2] = (value >> 8).land(0xFFU).to_byte()
@@ -125,7 +125,7 @@ pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
 
 ///|
 test "encode_png basic" {
-  let img : ImageData = { width: 1, height: 1, data: b"\xFF\x00\x00\xFF" }
+  let img : ImageData = { width: 1, height: 1, data: b"\xFF\x00\x00\xFF", }
   let png = encode_png(img)
   // Should start with PNG signature
   assert_eq(png[0].to_int(), 0x89)
@@ -136,7 +136,7 @@ test "encode_png basic" {
 
 ///|
 test "encode_png roundtrip 1x1" {
-  let original : ImageData = { width: 1, height: 1, data: b"\xFF\x00\x80\xC0" }
+  let original : ImageData = { width: 1, height: 1, data: b"\xFF\x00\x80\xC0", }
   let png = encode_png(original)
   let decoded = decode_png(png) catch { _ => panic() }
   assert_eq(decoded.width, original.width)
@@ -158,7 +158,7 @@ test "encode_png roundtrip 4x4" {
       buf[idx + 3] = b'\xFF' // A
     }
   }
-  let original : ImageData = { width, height, data: Bytes::from_array(buf) }
+  let original : ImageData = { width, height, data: Bytes::from_array(buf), }
   let png = encode_png(original)
   let decoded = decode_png(png) catch { _ => panic() }
   assert_eq(decoded.width, original.width)
@@ -168,7 +168,7 @@ test "encode_png roundtrip 4x4" {
 
 ///|
 test "encode_png invalid dimensions" {
-  let img : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
+  let img : ImageData = { width: 0, height: 1, data: Bytes::new(0), }
   let mut got_error = false
   try {
     let _ = encode_png(img)
@@ -180,7 +180,7 @@ test "encode_png invalid dimensions" {
 
 ///|
 test "encode_png invalid data length" {
-  let img : ImageData = { width: 2, height: 2, data: Bytes::new(4) }
+  let img : ImageData = { width: 2, height: 2, data: Bytes::new(4), }
   let mut got_error = false
   try {
     let _ = encode_png(img)

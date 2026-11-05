@@ -12,7 +12,7 @@ fn avif_bytes_has_brand_for_test(data : Bytes, brand : Bytes) -> Bool {
 }
 
 ///|
-extern "js" fn avif_test_read_dimensions(data : Bytes) -> Int =
+extern "js" fn avif_test_read_dimensions(data : Bytes) -> Int32 =
   #| (data) => {
   #|   try {
   #|     if (typeof process === "object" && process?.versions?.node) {
@@ -49,12 +49,12 @@ extern "js" fn avif_test_read_dimensions(data : Bytes) -> Int =
 
 ///|
 test "avif_encode writes loadable avif on js target" {
-  let original : ImageData = {
+  let original : @image.ImageData = {
     width: 4,
     height: 4,
     data: b"\xFF\x00\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\xFF\xFF\x00\xFF\xFF\xFF\x80\x40\x20\xFF\x20\x40\x80\xFF\x10\x20\x30\xFF\x30\x20\x10\xFF\x44\x55\x66\xFF\xAA\xBB\xCC\xFF\x55\x66\x77\xFF\x77\x66\x55\xFF\x11\x22\x33\xFF\x33\x22\x11\xFF",
   }
-  let avif = encode_avif(original)
+  let avif = @image.encode_avif(original)
   assert_true(avif.length() > 24)
   assert_eq(avif[4].to_int() & 0xFF, 0x66)
   assert_eq(avif[5].to_int() & 0xFF, 0x74)
@@ -68,14 +68,14 @@ test "avif_encode writes loadable avif on js target" {
 
 ///|
 test "avif_encode rejects transparent pixels in mvp" {
-  let img : ImageData = {
+  let img : @image.ImageData = {
     width: 4,
     height: 4,
     data: b"\xFF\x00\x00\xFF\x00\xFF\x00\xFF\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\xFF\x80\x00\xFF\xFF\x80\x80\x40\x20\xFF\x20\x40\x80\xFF\x10\x20\x30\xFF\x30\x20\x10\xFF\x00\x00\x00\x00\xAA\xBB\xCC\xFF\x55\x66\x77\xFF\x77\x66\x55\xFF\x11\x22\x33\xFF\x33\x22\x11\xFF",
   }
   let mut got_error = false
   try {
-    let _ = encode_avif(img)
+    let _ = @image.encode_avif(img)
   } catch {
     _ => got_error = true
   }

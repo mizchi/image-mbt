@@ -1,10 +1,10 @@
 ///|
-let webp_test_code_length_code_order : FixedArray[Int] = [
+let webp_test_code_length_code_order : FixedArray[Int32] = [
   17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ]
 
 ///|
-fn read_u32le_at_for_webp_test(data : Bytes, pos : Int) -> Int {
+fn read_u32le_at_for_webp_test(data : Bytes, pos : Int32) -> Int32 {
   (data[pos].to_int() & 0xFF) |
   ((data[pos + 1].to_int() & 0xFF) << 8) |
   ((data[pos + 2].to_int() & 0xFF) << 16) |
@@ -12,7 +12,7 @@ fn read_u32le_at_for_webp_test(data : Bytes, pos : Int) -> Int {
 }
 
 ///|
-fn webp_reverse_bits_for_test(value : Int, count : Int) -> Int {
+fn webp_reverse_bits_for_test(value : Int32, count : Int32) -> Int32 {
   let mut out = 0
   let mut v = value
   for _ in 0..<count {
@@ -23,26 +23,26 @@ fn webp_reverse_bits_for_test(value : Int, count : Int) -> Int {
 }
 
 ///|
-fn webp_pack_argb_for_test(r : Int, g : Int, b : Int, a : Int) -> Int {
+fn webp_pack_argb_for_test(r : Int32, g : Int32, b : Int32, a : Int32) -> Int32 {
   (a << 24) | (r << 16) | (g << 8) | b
 }
 
 ///|
-fn webp_color_cache_index_for_test(color : Int, bits : Int) -> Int {
+fn webp_color_cache_index_for_test(color : Int32, bits : Int32) -> Int32 {
   let hash = (color * 0x1E35A7BD) >> (32 - bits)
   hash & ((1 << bits) - 1)
 }
 
 ///|
 priv struct WebPTestPrefixCode {
-  lengths : FixedArray[Int]
-  codes : FixedArray[Int]
-  single_symbol : Int?
+  lengths : FixedArray[Int32]
+  codes : FixedArray[Int32]
+  single_symbol : Int32?
 }
 
 ///|
 fn webp_test_prefix_code_from_lengths(
-  lengths : FixedArray[Int],
+  lengths : FixedArray[Int32],
 ) -> WebPTestPrefixCode {
   let codes = FixedArray::make(lengths.length(), 0)
   let mut used_count = 0
@@ -86,27 +86,27 @@ fn webp_test_prefix_code_from_lengths(
       next_code[len] += 1
     }
   }
-  { lengths, codes, single_symbol: None }
+  { lengths, codes, single_symbol: None, }
 }
 
 ///|
 priv struct WebPTestBitReader {
   data : Bytes
-  mut pos : Int
-  mut bit_buf : Int
-  mut bits_count : Int
+  mut pos : Int32
+  mut bit_buf : Int32
+  mut bits_count : Int32
 }
 
 ///|
-fn WebPTestBitReader::new(data : Bytes, pos : Int) -> WebPTestBitReader {
-  { data, pos, bit_buf: 0, bits_count: 0 }
+fn WebPTestBitReader::new(data : Bytes, pos : Int32) -> WebPTestBitReader {
+  { data, pos, bit_buf: 0, bits_count: 0, }
 }
 
 ///|
 fn WebPTestBitReader::read_bits(
   self : WebPTestBitReader,
-  count : Int,
-) -> Int raise {
+  count : Int32,
+) -> Int32 raise {
   while self.bits_count < count {
     assert_true(self.pos < self.data.length())
     self.bit_buf = self.bit_buf |
@@ -124,7 +124,7 @@ fn WebPTestBitReader::read_bits(
 fn decode_webp_symbol_for_test(
   br : WebPTestBitReader,
   prefix : WebPTestPrefixCode,
-) -> Int raise {
+) -> Int32 raise {
   match prefix.single_symbol {
     Some(symbol) => symbol
     None => {
@@ -151,7 +151,7 @@ fn decode_webp_symbol_for_test(
 ///|
 fn decode_prefix_code_for_webp_test(
   br : WebPTestBitReader,
-  alphabet_size : Int,
+  alphabet_size : Int32,
 ) -> WebPTestPrefixCode raise {
   let is_simple = br.read_bits(1)
   let lengths = FixedArray::make(alphabet_size, 0)
@@ -193,7 +193,9 @@ fn decode_prefix_code_for_webp_test(
 }
 
 ///|
-fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
+fn decode_webp_for_test_impl(
+  data : Bytes,
+) -> (@image.ImageData, Bool, Int32) raise {
   assert_true(data.length() >= 21)
   assert_eq(data[0].to_int(), 0x52)
   assert_eq(data[1].to_int(), 0x49)
@@ -300,35 +302,35 @@ fn decode_webp_for_test_impl(data : Bytes) -> (ImageData, Bool, Int) raise {
     assert_eq(data[payload_end].to_int(), 0)
   }
   (
-    { width, height, data: Bytes::from_array(rgba) },
+    { width, height, data: Bytes::from_array(rgba), },
     subtract_green,
     color_cache_bits,
   )
 }
 
 ///|
-fn decode_webp_for_test(data : Bytes) -> ImageData raise {
+fn decode_webp_for_test(data : Bytes) -> @image.ImageData raise {
   let (image, _, _) = decode_webp_for_test_impl(data)
   image
 }
 
 ///|
-fn make_webp_test_image() -> ImageData {
+fn make_webp_test_image() -> @image.ImageData {
   let width = 3
   let height = 2
   let data = b"\xFF\x00\x00\xFF\x00\x80\xFF\xFF\x10\x20\x30\x40\x11\x22\x33\x44\xFE\xDC\xBA\x98\x01\x02\x03\x00"
-  { width, height, data }
+  { width, height, data, }
 }
 
 ///|
 fn make_webp_solid_image(
-  width : Int,
-  height : Int,
-  r : Int,
-  g : Int,
-  b : Int,
-  a : Int,
-) -> ImageData {
+  width : Int32,
+  height : Int32,
+  r : Int32,
+  g : Int32,
+  b : Int32,
+  a : Int32,
+) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for i in 0..<(width * height) {
     let offset = i * 4
@@ -337,19 +339,19 @@ fn make_webp_solid_image(
     buf[offset + 2] = b.to_byte()
     buf[offset + 3] = a.to_byte()
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
-fn make_webp_subtract_green_test_image() -> ImageData {
+fn make_webp_subtract_green_test_image() -> @image.ImageData {
   let width = 4
   let height = 1
   let data = b"\x0B\x0A\x0C\xFF\x15\x14\x16\xFF\x1F\x1E\x20\xFF\x29\x28\x2A\xFF"
-  { width, height, data }
+  { width, height, data, }
 }
 
 ///|
-fn make_webp_color_cache_test_image() -> ImageData {
+fn make_webp_color_cache_test_image() -> @image.ImageData {
   let width = 32
   let height = 32
   let buf = FixedArray::make(width * height * 4, b'\x00')
@@ -382,13 +384,17 @@ fn make_webp_color_cache_test_image() -> ImageData {
       buf[offset + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
 test "webp_encode basic signature" {
-  let img : ImageData = { width: 1, height: 1, data: b"\xAA\xBB\xCC\xDD" }
-  let webp = encode_webp(img)
+  let img : @image.ImageData = {
+    width: 1,
+    height: 1,
+    data: b"\xAA\xBB\xCC\xDD",
+  }
+  let webp = @image.encode_webp(img)
   assert_eq(webp[0].to_int(), 0x52)
   assert_eq(webp[1].to_int(), 0x49)
   assert_eq(webp[2].to_int(), 0x46)
@@ -406,7 +412,7 @@ test "webp_encode basic signature" {
 ///|
 test "webp_encode restricted roundtrip" {
   let original = make_webp_test_image()
-  let webp = encode_webp(original)
+  let webp = @image.encode_webp(original)
   let decoded = decode_webp_for_test(webp)
   assert_eq(decoded, original)
 }
@@ -414,14 +420,14 @@ test "webp_encode restricted roundtrip" {
 ///|
 test "webp_encode optimizes solid image size" {
   let img = make_webp_solid_image(16, 16, 0x80, 0x80, 0x80, 0xFF)
-  let webp = encode_webp(img)
+  let webp = @image.encode_webp(img)
   assert_true(webp.length() < 128)
 }
 
 ///|
 test "webp_encode uses subtract-green transform when beneficial" {
   let img = make_webp_subtract_green_test_image()
-  let webp = encode_webp(img)
+  let webp = @image.encode_webp(img)
   let (decoded, uses_subtract_green, _) = decode_webp_for_test_impl(webp)
   assert_true(uses_subtract_green)
   assert_eq(decoded, img)
@@ -430,7 +436,7 @@ test "webp_encode uses subtract-green transform when beneficial" {
 ///|
 test "webp_encode uses color cache when beneficial" {
   let img = make_webp_color_cache_test_image()
-  let webp = encode_webp(img)
+  let webp = @image.encode_webp(img)
   let (decoded, _, color_cache_bits) = decode_webp_for_test_impl(webp)
   assert_true(color_cache_bits > 0)
   assert_true(webp.length() < 512)
@@ -439,31 +445,35 @@ test "webp_encode uses color cache when beneficial" {
 
 ///|
 test "webp_encode preserves transparent rgb" {
-  let img : ImageData = {
+  let img : @image.ImageData = {
     width: 2,
     height: 1,
     data: b"\x10\x20\x30\x00\xAA\xBB\xCC\xFF",
   }
-  let webp = encode_webp(img)
+  let webp = @image.encode_webp(img)
   let decoded = decode_webp_for_test(webp)
   assert_eq(decoded, img)
 }
 
 ///|
 test "webp_encode invalid dimensions and data length" {
-  let img_invalid_dim : ImageData = { width: 0, height: 1, data: Bytes::new(0) }
-  try encode_webp(img_invalid_dim) catch {
+  let img_invalid_dim : @image.ImageData = {
+    width: 0,
+    height: 1,
+    data: Bytes::new(0),
+  }
+  try @image.encode_webp(img_invalid_dim) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_webp to raise for invalid dimensions")
   }
 
-  let img_invalid_data : ImageData = {
+  let img_invalid_data : @image.ImageData = {
     width: 2,
     height: 2,
     data: Bytes::new(4),
   }
-  try encode_webp(img_invalid_data) catch {
+  try @image.encode_webp(img_invalid_data) catch {
     _ => ()
   } noraise {
     _ => fail("expected encode_webp to raise for invalid data length")

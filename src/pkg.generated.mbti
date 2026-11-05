@@ -8,15 +8,15 @@ import {
 // Values
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
-pub fn decode_bmp_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> (Int, Int) raise DecodeError
+pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int32) raise DecodeError
 
-pub fn decode_image_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
+pub fn decode_image_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
 
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
 
-pub fn decode_png_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> IhdrData raise DecodeError
+pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData raise DecodeError
 
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
@@ -26,7 +26,7 @@ pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
-pub fn encode_jpeg(ImageData, quality? : Int) -> Bytes raise EncodeError
+pub fn encode_jpeg(ImageData, quality? : Int32) -> Bytes raise EncodeError
 
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
 
@@ -34,7 +34,7 @@ pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 
 pub fn package_name() -> String
 
-pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
+pub fn resize(ImageData, Int32, Int32, ResizeMethod) -> ImageData raise EncodeError
 
 // Errors
 pub(all) suberror DecodeError {
@@ -44,60 +44,88 @@ pub(all) suberror DecodeError {
   UnsupportedFeature(String)
   CorruptData(String)
 }
+pub fn DecodeError::output(Self, &Logger) -> Unit
+pub fn DecodeError::to_string(Self) -> String
 pub impl Show for DecodeError
 
 pub(all) suberror EncodeError {
   InvalidDimensions(String)
   InvalidData(String)
 }
+pub fn EncodeError::output(Self, &Logger) -> Unit
+pub fn EncodeError::to_string(Self) -> String
 pub impl Show for EncodeError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum ColorType {
   Grayscale
   Rgb
   Indexed
   GrayscaleAlpha
   Rgba
-} derive(Eq, @debug.Debug)
+}
+pub fn ColorType::equal(Self, Self) -> Bool
+pub fn ColorType::output(Self, &Logger) -> Unit
+pub fn ColorType::to_string(Self) -> String
 pub impl Show for ColorType
 
+#derive(Eq)
 pub(all) struct IhdrData {
-  width : Int
-  height : Int
-  bit_depth : Int
+  width : Int32
+  height : Int32
+  bit_depth : Int32
   color_type : ColorType
-  compression : Int
-  filter : Int
-  interlace : Int
-} derive(Eq)
+  compression : Int32
+  filter : Int32
+  interlace : Int32
+}
+pub fn IhdrData::equal(Self, Self) -> Bool
+pub fn IhdrData::output(Self, &Logger) -> Unit
+pub fn IhdrData::to_string(Self) -> String
 pub impl Show for IhdrData
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ImageData {
-  width : Int
-  height : Int
+  width : Int32
+  height : Int32
   data : Bytes
-} derive(Eq, @debug.Debug)
+}
+pub fn ImageData::equal(Self, Self) -> Bool
+pub fn ImageData::output(Self, &Logger) -> Unit
+pub fn ImageData::to_string(Self) -> String
 pub impl Show for ImageData
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ImageFormat {
   Png
   Bmp
-} derive(Eq, @debug.Debug)
+}
+pub fn ImageFormat::equal(Self, Self) -> Bool
+pub fn ImageFormat::output(Self, &Logger) -> Unit
+pub fn ImageFormat::to_string(Self) -> String
 pub impl Show for ImageFormat
 
+#derive(Eq)
 pub(all) enum ResizeMethod {
   Nearest
   Bilinear
   Bicubic
-} derive(Eq)
+}
+pub fn ResizeMethod::equal(Self, Self) -> Bool
+pub fn ResizeMethod::output(Self, &Logger) -> Unit
+pub fn ResizeMethod::to_string(Self) -> String
 pub impl Show for ResizeMethod
 
+#derive(Eq)
 pub(all) struct StreamImageInfo {
   format : ImageFormat
-  width : Int
-  height : Int
-} derive(Eq)
+  width : Int32
+  height : Int32
+}
+pub fn StreamImageInfo::equal(Self, Self) -> Bool
+pub fn StreamImageInfo::output(Self, &Logger) -> Unit
+pub fn StreamImageInfo::to_string(Self) -> String
 pub impl Show for StreamImageInfo
 
 // Type aliases

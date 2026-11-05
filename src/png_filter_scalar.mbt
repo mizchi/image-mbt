@@ -27,7 +27,7 @@ fn apply_filter_up_impl(row : Bytes, prev : Bytes) -> FixedArray[Byte] {
 }
 
 ///|
-fn apply_filter_sub_impl(row : Bytes, bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_sub_impl(row : Bytes, bpp : Int32) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
   for i in 0..<len {

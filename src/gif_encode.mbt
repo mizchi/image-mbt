@@ -1,34 +1,34 @@
 ///|
 priv struct GifPaletteEntry {
-  r : Int
-  g : Int
-  b : Int
+  r : Int32
+  g : Int32
+  b : Int32
 }
 
 ///|
 priv struct GifPaletteData {
-  indices : Array[Int]
+  indices : Array[Int32]
   colors : Array[GifPaletteEntry]
-  transparent_index : Int?
+  transparent_index : Int32?
 }
 
 ///|
 priv struct GifBitWriter {
   buf : Array[Byte]
-  mut bit_buf : Int
-  mut bits_count : Int
+  mut bit_buf : Int32
+  mut bits_count : Int32
 }
 
 ///|
 fn GifBitWriter::new() -> GifBitWriter {
-  { buf: [], bit_buf: 0, bits_count: 0 }
+  { buf: [], bit_buf: 0, bits_count: 0, }
 }
 
 ///|
 fn GifBitWriter::write_bits(
   self : GifBitWriter,
-  value : Int,
-  count : Int,
+  value : Int32,
+  count : Int32,
 ) -> Unit {
   if count <= 0 {
     return
@@ -77,12 +77,12 @@ fn concat_bytes(parts : Array[Bytes]) -> Bytes {
 }
 
 ///|
-fn gif_color_key(r : Int, g : Int, b : Int) -> Int {
+fn gif_color_key(r : Int32, g : Int32, b : Int32) -> Int32 {
   (r & 0xFF) | ((g & 0xFF) << 8) | ((b & 0xFF) << 16)
 }
 
 ///|
-fn gif_next_power_of_two(value : Int) -> Int {
+fn gif_next_power_of_two(value : Int32) -> Int32 {
   let mut size = 2
   while size < value {
     size *= 2
@@ -91,7 +91,7 @@ fn gif_next_power_of_two(value : Int) -> Int {
 }
 
 ///|
-fn gif_color_table_size_field(table_size : Int) -> Int {
+fn gif_color_table_size_field(table_size : Int32) -> Int32 {
   let mut field = 0
   let mut size = 2
   while size < table_size {
@@ -102,7 +102,7 @@ fn gif_color_table_size_field(table_size : Int) -> Int {
 }
 
 ///|
-fn gif_min_code_size(color_count : Int) -> Int {
+fn gif_min_code_size(color_count : Int32) -> Int32 {
   let mut bits = 0
   let mut size = 1
   while size < color_count {
@@ -114,10 +114,10 @@ fn gif_min_code_size(color_count : Int) -> Int {
 
 ///|
 fn collect_gif_palette(img : ImageData) -> GifPaletteData raise EncodeError {
-  let palette_map : Map[Int, Int] = Map([])
-  let indices : Array[Int] = []
+  let palette_map : Map[Int32, Int32] = Map([])
+  let indices : Array[Int32] = []
   let colors : Array[GifPaletteEntry] = []
-  let mut transparent_index : Int? = None
+  let mut transparent_index : Int32? = None
   let pixel_count = img.width * img.height
 
   for i in 0..<pixel_count {
@@ -134,7 +134,7 @@ fn collect_gif_palette(img : ImageData) -> GifPaletteData raise EncodeError {
           if new_index >= 256 {
             raise InvalidData("GIF palette exceeded 256 colors")
           }
-          colors.push({ r: 0, g: 0, b: 0 })
+          colors.push({ r: 0, g: 0, b: 0, })
           transparent_index = Some(new_index)
           new_index
         }
@@ -153,22 +153,22 @@ fn collect_gif_palette(img : ImageData) -> GifPaletteData raise EncodeError {
         if new_index >= 256 {
           raise InvalidData("GIF palette exceeded 256 colors")
         }
-        colors.push({ r, g, b })
+        colors.push({ r, g, b, })
         palette_map.set(key, new_index)
         new_index
       }
     }
     indices.push(index)
   }
-  { indices, colors, transparent_index }
+  { indices, colors, transparent_index, }
 }
 
 ///|
 fn encode_gif_logical_screen_descriptor(
-  width : Int,
-  height : Int,
-  color_table_size : Int,
-  background_index : Int,
+  width : Int32,
+  height : Int32,
+  color_table_size : Int32,
+  background_index : Int32,
 ) -> Bytes {
   let buf = FixedArray::make(13, b'\x00')
   buf[0] = b'\x47'
@@ -189,7 +189,7 @@ fn encode_gif_logical_screen_descriptor(
 ///|
 fn encode_gif_global_color_table(
   colors : Array[GifPaletteEntry],
-  color_table_size : Int,
+  color_table_size : Int32,
 ) -> Bytes {
   let table = FixedArray::make(color_table_size * 3, b'\x00')
   for i in 0..<colors.length() {
@@ -202,7 +202,7 @@ fn encode_gif_global_color_table(
 }
 
 ///|
-fn encode_gif_graphics_control_extension(transparent_index : Int?) -> Bytes? {
+fn encode_gif_graphics_control_extension(transparent_index : Int32?) -> Bytes? {
   match transparent_index {
     None => None
     Some(index) => {
@@ -218,7 +218,7 @@ fn encode_gif_graphics_control_extension(transparent_index : Int?) -> Bytes? {
 }
 
 ///|
-fn encode_gif_image_descriptor(width : Int, height : Int) -> Bytes {
+fn encode_gif_image_descriptor(width : Int32, height : Int32) -> Bytes {
   let buf = FixedArray::make(10, b'\x00')
   buf[0] = b'\x2C'
   write_u16le(buf, 5, width)
@@ -227,7 +227,7 @@ fn encode_gif_image_descriptor(width : Int, height : Int) -> Bytes {
 }
 
 ///|
-fn encode_gif_lzw(indices : Array[Int], min_code_size : Int) -> Bytes {
+fn encode_gif_lzw(indices : Array[Int32], min_code_size : Int32) -> Bytes {
   let clear = 1 << min_code_size
   let eoi = clear + 1
   let writer = GifBitWriter::new()

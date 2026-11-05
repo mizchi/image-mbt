@@ -18,7 +18,7 @@ fn make_bench_png() -> Bytes {
       buf[idx + 3] = b'\xFF'
     }
   }
-  let img : ImageData = { width, height, data: Bytes::from_array(buf) }
+  let img : ImageData = { width, height, data: Bytes::from_array(buf), }
   encode_png(img) catch {
     _ => panic()
   }
@@ -38,7 +38,7 @@ fn make_bench_image() -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
@@ -75,7 +75,7 @@ fn make_webp_cache_bench_image() -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|

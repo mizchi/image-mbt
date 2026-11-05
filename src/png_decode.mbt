@@ -4,7 +4,7 @@ let png_signature : FixedArray[Byte] = [
 ]
 
 ///|
-fn read_u32be(data : Bytes, offset : Int) -> UInt {
+fn read_u32be(data : Bytes, offset : Int32) -> UInt32 {
   let b0 = data[offset].to_int() & 0xFF
   let b1 = data[offset + 1].to_int() & 0xFF
   let b2 = data[offset + 2].to_int() & 0xFF
@@ -13,7 +13,7 @@ fn read_u32be(data : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn read_i32be(data : Bytes, offset : Int) -> Int {
+fn read_i32be(data : Bytes, offset : Int32) -> Int32 {
   let b0 = data[offset].to_int() & 0xFF
   let b1 = data[offset + 1].to_int() & 0xFF
   let b2 = data[offset + 2].to_int() & 0xFF
@@ -22,7 +22,7 @@ fn read_i32be(data : Bytes, offset : Int) -> Int {
 }
 
 ///|
-fn chunk_type_str(data : Bytes, offset : Int) -> String {
+fn chunk_type_str(data : Bytes, offset : Int32) -> String {
   String::from_array([
     data[offset].to_int().unsafe_to_char(),
     data[offset + 1].to_int().unsafe_to_char(),
@@ -49,7 +49,7 @@ fn parse_ihdr(data : Bytes) -> IhdrData raise DecodeError {
   if interlace != 0 {
     raise UnsupportedFeature("interlaced PNG not supported")
   }
-  { width, height, bit_depth, color_type: ct, compression, filter, interlace }
+  { width, height, bit_depth, color_type: ct, compression, filter, interlace, }
 }
 
 ///|
@@ -94,7 +94,7 @@ fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
     } else {
       Bytes::new(0)
     }
-    chunks.push({ chunk_type: ct, data: chunk_data })
+    chunks.push({ chunk_type: ct, data: chunk_data, })
     pos = pos + 12 + length
     if ct == "IEND" {
       break
@@ -109,7 +109,7 @@ fn parse_png_ihdr(chunks : Array[PngChunk]) -> IhdrData raise DecodeError {
     raise MissingChunk("IHDR")
   }
   match chunks[0] {
-    { chunk_type: "IHDR", data } => parse_ihdr(data)
+    { chunk_type: "IHDR", data, } => parse_ihdr(data)
     _ => raise MissingChunk("IHDR must be first chunk")
   }
 }
@@ -141,7 +141,7 @@ fn decode_png_scanlines(
   idat_parts : Array[Bytes],
   palette : Bytes?,
   palette_alpha : Bytes?,
-  on_row : (Int, Bytes) -> Unit,
+  on_row : (Int32, Bytes) -> Unit,
 ) -> Unit raise DecodeError {
   // Concatenate IDAT data
   let total_idat_len = idat_parts.fold(init=0, fn(acc, b) { acc + b.length() })
@@ -196,7 +196,7 @@ fn decode_png_scanlines(
 ///|
 pub fn decode_png_stream(
   raw : Bytes,
-  on_row~ : (Int, Bytes) -> Unit,
+  on_row~ : (Int32, Bytes) -> Unit,
 ) -> IhdrData raise DecodeError {
   let chunks = parse_chunks(raw)
   let ihdr = parse_png_ihdr(chunks)
@@ -215,7 +215,7 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
     let dst_offset = y * ihdr.width * 4
     rgba_buf.blit_from_bytes(dst_offset, row, 0, ihdr.width * 4)
   })
-  { width: ihdr.width, height: ihdr.height, data: Bytes::from_array(rgba_buf) }
+  { width: ihdr.width, height: ihdr.height, data: Bytes::from_array(rgba_buf), }
 }
 
 ///|

@@ -15,7 +15,7 @@ test "decode_png 1x1 red pixel" {
   // IEND
   let iend_chunk = make_chunk(b"\x49\x45\x4E\x44", b"")
   let png = concat_bytes([sig, ihdr_chunk, idat_chunk, iend_chunk])
-  let img = decode_png(png)
+  let img = @image.decode_png(png)
   assert_eq(img.width, 1)
   assert_eq(img.height, 1)
   assert_eq(img.data.length(), 4)
@@ -40,7 +40,7 @@ test "decode_png 2x2 gradient" {
   let png = concat_bytes([
     b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", ihdr_chunk, idat_chunk, iend_chunk,
   ])
-  let img = decode_png(png)
+  let img = @image.decode_png(png)
   assert_eq(img.width, 2)
   assert_eq(img.height, 2)
   assert_eq(img.data.length(), 16)
@@ -61,7 +61,7 @@ test "decode_png invalid signature" {
   let data = b"\x00\x00\x00\x00\x00\x00\x00\x00"
   let mut got_error = false
   try {
-    let _ = decode_png(data)
+    let _ = @image.decode_png(data)
   } catch {
     _ => got_error = true
   }

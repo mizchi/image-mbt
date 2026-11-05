@@ -1,5 +1,5 @@
 ///|
-fn write_u32le(buf : FixedArray[Byte], offset : Int, value : UInt) -> Unit {
+fn write_u32le(buf : FixedArray[Byte], offset : Int32, value : UInt32) -> Unit {
   buf[offset] = value.land(0xFFU).to_byte()
   buf[offset + 1] = (value >> 8).land(0xFFU).to_byte()
   buf[offset + 2] = (value >> 16).land(0xFFU).to_byte()
@@ -7,13 +7,13 @@ fn write_u32le(buf : FixedArray[Byte], offset : Int, value : UInt) -> Unit {
 }
 
 ///|
-fn write_u16le(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
+fn write_u16le(buf : FixedArray[Byte], offset : Int32, value : Int32) -> Unit {
   buf[offset] = (value & 0xFF).to_byte()
   buf[offset + 1] = ((value >> 8) & 0xFF).to_byte()
 }
 
 ///|
-fn write_i32le(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
+fn write_i32le(buf : FixedArray[Byte], offset : Int32, value : Int32) -> Unit {
   write_u32le(buf, offset, value.reinterpret_as_uint())
 }
 

@@ -1,5 +1,5 @@
 ///|
-fn clamp_int(v : Int, lo : Int, hi : Int) -> Int {
+fn clamp_int(v : Int32, lo : Int32, hi : Int32) -> Int32 {
   if v < lo {
     lo
   } else if v > hi {
@@ -12,11 +12,11 @@ fn clamp_int(v : Int, lo : Int, hi : Int) -> Int {
 ///|
 fn get_pixel(
   src : FixedArray[Byte],
-  width : Int,
-  height : Int,
-  x : Int,
-  y : Int,
-) -> (Int, Int, Int, Int) {
+  width : Int32,
+  height : Int32,
+  x : Int32,
+  y : Int32,
+) -> (Int32, Int32, Int32, Int32) {
   let cx = clamp_int(x, 0, width - 1)
   let cy = clamp_int(y, 0, height - 1)
   let idx = (cy * width + cx) * 4
@@ -58,8 +58,8 @@ fn cubic_weight(t : Double) -> Double {
 ///|
 fn resize_nearest(
   img : ImageData,
-  new_width : Int,
-  new_height : Int,
+  new_width : Int32,
+  new_height : Int32,
 ) -> ImageData {
   let src = img.data.to_fixedarray()
   let src_w = img.width
@@ -79,14 +79,14 @@ fn resize_nearest(
       buf[di + 3] = src[si + 3]
     }
   }
-  { width: new_width, height: new_height, data: Bytes::from_array(buf) }
+  { width: new_width, height: new_height, data: Bytes::from_array(buf), }
 }
 
 ///|
 fn resize_bilinear(
   img : ImageData,
-  new_width : Int,
-  new_height : Int,
+  new_width : Int32,
+  new_height : Int32,
 ) -> ImageData {
   let src = img.data.to_fixedarray()
   let src_w = img.width.to_double()
@@ -135,14 +135,14 @@ fn resize_bilinear(
       buf[idx + 3] = clamp_to_byte(a + 0.5)
     }
   }
-  { width: new_width, height: new_height, data: Bytes::from_array(buf) }
+  { width: new_width, height: new_height, data: Bytes::from_array(buf), }
 }
 
 ///|
 fn resize_bicubic(
   img : ImageData,
-  new_width : Int,
-  new_height : Int,
+  new_width : Int32,
+  new_height : Int32,
 ) -> ImageData {
   let src = img.data.to_fixedarray()
   let src_w = img.width.to_double()
@@ -187,14 +187,14 @@ fn resize_bicubic(
       buf[idx + 3] = clamp_to_byte(a_sum + 0.5)
     }
   }
-  { width: new_width, height: new_height, data: Bytes::from_array(buf) }
+  { width: new_width, height: new_height, data: Bytes::from_array(buf), }
 }
 
 ///|
 pub fn resize(
   img : ImageData,
-  new_width : Int,
-  new_height : Int,
+  new_width : Int32,
+  new_height : Int32,
   resize_method : ResizeMethod,
 ) -> ImageData raise EncodeError {
   if new_width <= 0 || new_height <= 0 {

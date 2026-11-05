@@ -32,7 +32,7 @@ fn reconstruct_filter_up_v128(
   row : Bytes,
   prev : Bytes,
   buf : FixedArray[Byte],
-  len : Int,
+  len : Int32,
 ) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.add v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.add i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
 
@@ -57,7 +57,7 @@ fn apply_filter_up_v128(
   row : Bytes,
   prev : Bytes,
   buf : FixedArray[Byte],
-  len : Int,
+  len : Int32,
 ) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.sub v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.sub i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
 
@@ -66,7 +66,7 @@ fn apply_filter_up_v128(
 ///
 /// Head (i < bpp) is scalar; then SIMD as long as `i + 16 <= len`, then
 /// scalar tail. The SIMD load `row + i - bpp` is safe because i >= bpp.
-fn apply_filter_sub_impl(row : Bytes, bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_sub_impl(row : Bytes, bpp : Int32) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
   if len == 0 {
@@ -91,7 +91,7 @@ fn apply_filter_sub_impl(row : Bytes, bpp : Int) -> FixedArray[Byte] {
 fn apply_filter_sub_v128(
   row : Bytes,
   buf : FixedArray[Byte],
-  bpp : Int,
-  len : Int,
+  bpp : Int32,
+  len : Int32,
 ) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 local.get 2 i32.sub i32.const 4 i32.shr_s i32.const 4 i32.shl local.get 2 i32.add local.set 4 local.get 2 local.set 5 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 0 local.get 5 i32.add local.get 2 i32.sub v128.load i8x16.sub v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 1 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 0 local.get 5 i32.add local.get 2 i32.sub i32.load8_u i32.sub i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)

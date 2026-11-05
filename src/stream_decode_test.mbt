@@ -1,5 +1,8 @@
 ///|
-fn make_stream_dispatch_image(width : Int, height : Int) -> ImageData {
+fn make_stream_dispatch_image(
+  width : Int32,
+  height : Int32,
+) -> @image.ImageData {
   let buf = FixedArray::make(width * height * 4, b'\x00')
   for y in 0..<height {
     for x in 0..<width {
@@ -10,14 +13,14 @@ fn make_stream_dispatch_image(width : Int, height : Int) -> ImageData {
       buf[idx + 3] = b'\xFF'
     }
   }
-  { width, height, data: Bytes::from_array(buf) }
+  { width, height, data: Bytes::from_array(buf), }
 }
 
 ///|
 fn concat_stream_rows(
   rows : Array[Bytes],
-  width : Int,
-  height : Int,
+  width : Int32,
+  height : Int32,
 ) -> Bytes raise {
   let total = width * height * 4
   let buf = FixedArray::make(total, b'\x00')
@@ -35,36 +38,42 @@ fn concat_stream_rows(
 ///|
 test "decode_image_stream PNG dispatch" {
   let original = make_stream_dispatch_image(8, 6)
-  let png = encode_png(original)
+  let png = @image.encode_png(original)
   let rows : Array[Bytes] = []
-  let info = decode_image_stream(png, on_row=fn(_y, row) { rows.push(row) })
+  let info = @image.decode_image_stream(png, on_row=fn(_y, row) {
+    rows.push(row)
+  })
   assert_eq(info.format, Png)
   assert_eq(info.width, 8)
   assert_eq(info.height, 6)
   assert_eq(rows.length(), 6)
   let stream_data = concat_stream_rows(rows, 8, 6)
-  let decoded = decode_png(png)
+  let decoded = @image.decode_png(png)
   assert_eq(stream_data, decoded.data)
 }
 
 ///|
 test "decode_image_stream BMP dispatch" {
   let original = make_stream_dispatch_image(8, 6)
-  let bmp = encode_bmp(original)
+  let bmp = @image.encode_bmp(original)
   let rows : Array[Bytes] = []
-  let info = decode_image_stream(bmp, on_row=fn(_y, row) { rows.push(row) })
+  let info = @image.decode_image_stream(bmp, on_row=fn(_y, row) {
+    rows.push(row)
+  })
   assert_eq(info.format, Bmp)
   assert_eq(info.width, 8)
   assert_eq(info.height, 6)
   assert_eq(rows.length(), 6)
   let stream_data = concat_stream_rows(rows, 8, 6)
-  let decoded = decode_bmp(bmp)
+  let decoded = @image.decode_bmp(bmp)
   assert_eq(stream_data, decoded.data)
 }
 
 ///|
 test "decode_image_stream invalid signature" {
-  try decode_image_stream(b"\x00\x11\x22\x33", on_row=fn(_, _) {  }) catch {
+  try
+    @image.decode_image_stream(b"\x00\x11\x22\x33", on_row=fn(_, _) {  })
+  catch {
     _ => ()
   } noraise {
     _ => fail("expected decode_image_stream to raise for invalid signature")

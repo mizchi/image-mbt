@@ -2,18 +2,22 @@
 /// Helper to create a 2x2 RGBA test image:
 ///   (255,0,0,255)   (0,255,0,255)
 ///   (0,0,255,255)   (255,255,0,255)
-fn make_2x2_image() -> ImageData {
+fn make_2x2_image() -> @image.ImageData {
   let arr : FixedArray[Byte] = [
     b'\xFF', b'\x00', b'\x00', b'\xFF', // red
      b'\x00', b'\xFF', b'\x00', b'\xFF', // green
      b'\x00', b'\x00', b'\xFF', b'\xFF', // blue
      b'\xFF', b'\xFF', b'\x00', b'\xFF', // yellow
   ]
-  { width: 2, height: 2, data: Bytes::from_array(arr) }
+  { width: 2, height: 2, data: Bytes::from_array(arr), }
 }
 
 ///|
-fn pixel_at(img : ImageData, x : Int, y : Int) -> (Int, Int, Int, Int) {
+fn pixel_at(
+  img : @image.ImageData,
+  x : Int32,
+  y : Int32,
+) -> (Int32, Int32, Int32, Int32) {
   let idx = (y * img.width + x) * 4
   (
     img.data[idx].to_int(),
@@ -26,7 +30,7 @@ fn pixel_at(img : ImageData, x : Int, y : Int) -> (Int, Int, Int, Int) {
 ///|
 test "nearest 2x2 -> 4x4" {
   let img = make_2x2_image()
-  let out = resize(img, 4, 4, Nearest)
+  let out = @image.resize(img, 4, 4, Nearest)
   assert_eq(out.width, 4)
   assert_eq(out.height, 4)
   // top-left 2x2 block should be red
@@ -48,7 +52,7 @@ test "nearest 2x2 -> 4x4" {
 ///|
 test "bilinear 2x2 -> 4x4" {
   let img = make_2x2_image()
-  let out = resize(img, 4, 4, Bilinear)
+  let out = @image.resize(img, 4, 4, Bilinear)
   assert_eq(out.width, 4)
   assert_eq(out.height, 4)
   // corner pixels should be close to the original colors
@@ -68,7 +72,7 @@ test "bilinear 2x2 -> 4x4" {
 ///|
 test "bicubic 2x2 -> 4x4" {
   let img = make_2x2_image()
-  let out = resize(img, 4, 4, Bicubic)
+  let out = @image.resize(img, 4, 4, Bicubic)
   assert_eq(out.width, 4)
   assert_eq(out.height, 4)
   // corner pixels should be close to original
@@ -86,7 +90,7 @@ test "bicubic 2x2 -> 4x4" {
 ///|
 test "identity resize" {
   let img = make_2x2_image()
-  let out = resize(img, 2, 2, Nearest)
+  let out = @image.resize(img, 2, 2, Nearest)
   assert_eq(out.width, img.width)
   assert_eq(out.height, img.height)
   assert_eq(out.data, img.data)
@@ -100,8 +104,12 @@ test "downscale 4x4 -> 2x2" {
     arr[i * 4] = b'\xFF'
     arr[i * 4 + 3] = b'\xFF'
   }
-  let img : ImageData = { width: 4, height: 4, data: Bytes::from_array(arr) }
-  let out = resize(img, 2, 2, Nearest)
+  let img : @image.ImageData = {
+    width: 4,
+    height: 4,
+    data: Bytes::from_array(arr),
+  }
+  let out = @image.resize(img, 2, 2, Nearest)
   assert_eq(out.width, 2)
   assert_eq(out.height, 2)
   for y in 0..<2 {
@@ -114,23 +122,27 @@ test "downscale 4x4 -> 2x2" {
 ///|
 test "1x1 -> 3x3" {
   let arr : FixedArray[Byte] = [b'\x80', b'\x40', b'\xC0', b'\xFF']
-  let img : ImageData = { width: 1, height: 1, data: Bytes::from_array(arr) }
+  let img : @image.ImageData = {
+    width: 1,
+    height: 1,
+    data: Bytes::from_array(arr),
+  }
   // nearest should replicate the single pixel
-  let out_nn = resize(img, 3, 3, Nearest)
+  let out_nn = @image.resize(img, 3, 3, Nearest)
   for y in 0..<3 {
     for x in 0..<3 {
       assert_eq(pixel_at(out_nn, x, y), (128, 64, 192, 255))
     }
   }
   // bilinear should also replicate (clamp-to-edge)
-  let out_bl = resize(img, 3, 3, Bilinear)
+  let out_bl = @image.resize(img, 3, 3, Bilinear)
   for y in 0..<3 {
     for x in 0..<3 {
       assert_eq(pixel_at(out_bl, x, y), (128, 64, 192, 255))
     }
   }
   // bicubic should replicate too
-  let out_bc = resize(img, 3, 3, Bicubic)
+  let out_bc = @image.resize(img, 3, 3, Bicubic)
   for y in 0..<3 {
     for x in 0..<3 {
       assert_eq(pixel_at(out_bc, x, y), (128, 64, 192, 255))
@@ -141,17 +153,17 @@ test "1x1 -> 3x3" {
 ///|
 test "invalid dimensions" {
   let img = make_2x2_image()
-  try resize(img, 0, 4, Nearest) catch {
+  try @image.resize(img, 0, 4, Nearest) catch {
     _ => ()
   } noraise {
     _ => fail("expected resize to raise for width 0")
   }
-  try resize(img, 4, -1, Nearest) catch {
+  try @image.resize(img, 4, -1, Nearest) catch {
     _ => ()
   } noraise {
     _ => fail("expected resize to raise for negative height")
   }
-  try resize(img, 0, 0, Nearest) catch {
+  try @image.resize(img, 0, 0, Nearest) catch {
     _ => ()
   } noraise {
     _ => fail("expected resize to raise for zero dimensions")
@@ -161,9 +173,9 @@ test "invalid dimensions" {
 ///|
 test "PNG roundtrip resize" {
   let img = make_2x2_image()
-  let resized = resize(img, 4, 4, Bilinear)
-  let encoded = encode_png(resized)
-  let decoded = decode_png(encoded)
+  let resized = @image.resize(img, 4, 4, Bilinear)
+  let encoded = @image.encode_png(resized)
+  let decoded = @image.decode_png(encoded)
   assert_eq(decoded.width, 4)
   assert_eq(decoded.height, 4)
   assert_eq(decoded.data, resized.data)

@@ -1,5 +1,5 @@
 ///|
-fn paeth_predictor(a : Int, b : Int, c : Int) -> Int {
+fn paeth_predictor(a : Int32, b : Int32, c : Int32) -> Int32 {
   let p = a + b - c
   let pa = if p > a { p - a } else { a - p }
   let pb = if p > b { p - b } else { b - p }
@@ -17,10 +17,10 @@ fn paeth_predictor(a : Int, b : Int, c : Int) -> Int {
 /// Reconstruct a filtered scanline (decode side).
 /// `filter_type`: 0=None, 1=Sub, 2=Up, 3=Average, 4=Paeth
 fn reconstruct_row(
-  filter_type : Int,
+  filter_type : Int32,
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
+  bpp : Int32,
 ) -> Bytes raise DecodeError {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
@@ -54,7 +54,7 @@ fn reconstruct_row(
 fn apply_filter_none(
   row : Bytes,
   _prev : Bytes,
-  _bpp : Int,
+  _bpp : Int32,
 ) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
@@ -63,12 +63,16 @@ fn apply_filter_none(
 }
 
 ///|
-fn apply_filter_sub(row : Bytes, _prev : Bytes, bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_sub(
+  row : Bytes,
+  _prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
   apply_filter_sub_impl(row, bpp)
 }
 
 ///|
-fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int32) -> FixedArray[Byte] {
   apply_filter_up_impl(row, prev)
 }
 
@@ -76,7 +80,7 @@ fn apply_filter_up(row : Bytes, prev : Bytes, _bpp : Int) -> FixedArray[Byte] {
 fn apply_filter_average(
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
+  bpp : Int32,
 ) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
@@ -90,7 +94,11 @@ fn apply_filter_average(
 }
 
 ///|
-fn apply_filter_paeth(row : Bytes, prev : Bytes, bpp : Int) -> FixedArray[Byte] {
+fn apply_filter_paeth(
+  row : Bytes,
+  prev : Bytes,
+  bpp : Int32,
+) -> FixedArray[Byte] {
   let len = row.length()
   let buf = FixedArray::make(len, b'\x00')
   for i in 0..<len {
@@ -104,7 +112,7 @@ fn apply_filter_paeth(row : Bytes, prev : Bytes, bpp : Int) -> FixedArray[Byte] 
 }
 
 ///|
-fn filter_sum(buf : FixedArray[Byte]) -> Int {
+fn filter_sum(buf : FixedArray[Byte]) -> Int32 {
   let mut sum = 0
   for i in 0..<buf.length() {
     let v = buf[i].to_int()
@@ -117,8 +125,8 @@ fn filter_sum(buf : FixedArray[Byte]) -> Int {
 fn select_best_filter(
   row : Bytes,
   prev : Bytes,
-  bpp : Int,
-) -> (Int, FixedArray[Byte]) {
+  bpp : Int32,
+) -> (Int32, FixedArray[Byte]) {
   let f0 = apply_filter_none(row, prev, bpp)
   let mut best_type = 0
   let mut best_sum = filter_sum(f0)
