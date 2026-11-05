@@ -14,5 +14,7 @@ options(
     "png_color_simd.mbt": [ "wasm" ],
     "png_filter_scalar.mbt": [ "not", "wasm" ],
     "png_filter_simd.mbt": [ "wasm" ],
+    "resize_scalar.mbt": [ "not", "wasm" ],
+    "resize_simd.mbt": [ "wasm" ],
   },
 )

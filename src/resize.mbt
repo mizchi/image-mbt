@@ -10,36 +10,6 @@ fn clamp_int(v : Int32, lo : Int32, hi : Int32) -> Int32 {
 }
 
 ///|
-fn get_pixel(
-  src : FixedArray[Byte],
-  width : Int32,
-  height : Int32,
-  x : Int32,
-  y : Int32,
-) -> (Int32, Int32, Int32, Int32) {
-  let cx = clamp_int(x, 0, width - 1)
-  let cy = clamp_int(y, 0, height - 1)
-  let idx = (cy * width + cx) * 4
-  (
-    src[idx].to_int(),
-    src[idx + 1].to_int(),
-    src[idx + 2].to_int(),
-    src[idx + 3].to_int(),
-  )
-}
-
-///|
-fn clamp_to_byte(v : Double) -> Byte {
-  if v < 0.0 {
-    b'\x00'
-  } else if v > 255.0 {
-    b'\xFF'
-  } else {
-    v.to_int().to_byte()
-  }
-}
-
-///|
 fn cubic_weight(t : Double) -> Double {
   let a = -0.5
   let abs_t = if t < 0.0 { -t } else { t }
@@ -83,111 +53,128 @@ fn resize_nearest(
 }
 
 ///|
-fn resize_bilinear(
-  img : ImageData,
-  new_width : Int32,
-  new_height : Int32,
-) -> ImageData {
-  let src = img.data.to_fixedarray()
-  let src_w = img.width.to_double()
-  let src_h = img.height.to_double()
-  let dst_w = new_width.to_double()
-  let dst_h = new_height.to_double()
-  let buf = FixedArray::make(new_width * new_height * 4, b'\x00')
-  for dy in 0..<new_height {
-    for dx in 0..<new_width {
-      let src_x = (dx.to_double() + 0.5) * src_w / dst_w - 0.5
-      let src_y = (dy.to_double() + 0.5) * src_h / dst_h - 0.5
-      let x0 = src_x.to_int() - (if src_x < 0.0 { 1 } else { 0 })
-      let y0 = src_y.to_int() - (if src_y < 0.0 { 1 } else { 0 })
-      let x1 = x0 + 1
-      let y1 = y0 + 1
-      let fx = src_x - x0.to_double()
-      let fy = src_y - y0.to_double()
-      let (r00, g00, b00, a00) = get_pixel(src, img.width, img.height, x0, y0)
-      let (r10, g10, b10, a10) = get_pixel(src, img.width, img.height, x1, y0)
-      let (r01, g01, b01, a01) = get_pixel(src, img.width, img.height, x0, y1)
-      let (r11, g11, b11, a11) = get_pixel(src, img.width, img.height, x1, y1)
-      let w00 = (1.0 - fx) * (1.0 - fy)
-      let w10 = fx * (1.0 - fy)
-      let w01 = (1.0 - fx) * fy
-      let w11 = fx * fy
-      let r = r00.to_double() * w00 +
-        r10.to_double() * w10 +
-        r01.to_double() * w01 +
-        r11.to_double() * w11
-      let g = g00.to_double() * w00 +
-        g10.to_double() * w10 +
-        g01.to_double() * w01 +
-        g11.to_double() * w11
-      let b = b00.to_double() * w00 +
-        b10.to_double() * w10 +
-        b01.to_double() * w01 +
-        b11.to_double() * w11
-      let a = a00.to_double() * w00 +
-        a10.to_double() * w10 +
-        a01.to_double() * w01 +
-        a11.to_double() * w11
-      let idx = (dy * new_width + dx) * 4
-      buf[idx] = clamp_to_byte(r + 0.5)
-      buf[idx + 1] = clamp_to_byte(g + 0.5)
-      buf[idx + 2] = clamp_to_byte(b + 0.5)
-      buf[idx + 3] = clamp_to_byte(a + 0.5)
-    }
-  }
-  { width: new_width, height: new_height, data: Bytes::from_array(buf), }
+/// Fixed-point 1.0 for resampling weights (14 bits per axis).
+const RESAMPLE_ONE : Int32 = 16384
+
+///|
+/// Precomputed filter taps for one axis.
+///
+/// For output coordinate `d`, taps `d * n ..< d * n + n` hold the source
+/// offsets (already clamped to the image edge and multiplied by `stride`)
+/// and the fixed-point weights, which sum to exactly `RESAMPLE_ONE` so that
+/// flat regions are reproduced exactly.
+priv struct ResampleTaps {
+  n : Int32
+  offsets : FixedArray[Int32]
+  weights : FixedArray[Int32]
 }
 
 ///|
-fn resize_bicubic(
+fn ResampleTaps::new(
+  src_len : Int32,
+  dst_len : Int32,
+  kind : ResizeMethod,
+  stride : Int32,
+) -> ResampleTaps {
+  if src_len == dst_len {
+    // Identity: a single tap of weight 1.0.
+    return {
+      n: 1,
+      offsets: FixedArray::makei(dst_len, fn(d) { d * stride }),
+      weights: FixedArray::make(dst_len, RESAMPLE_ONE),
+    }
+  }
+  let n = match kind {
+    Bicubic => 4
+    _ => 2
+  }
+  let offsets = FixedArray::make(dst_len * n, 0)
+  let weights = FixedArray::make(dst_len * n, 0)
+  let wf = FixedArray::make(n, 0.0)
+  let scale = src_len.to_double() / dst_len.to_double()
+  for d in 0..<dst_len {
+    let s = (d.to_double() + 0.5) * scale - 0.5
+    let i0 = s.floor().to_int()
+    let f = s - i0.to_double()
+    let first = match kind {
+      Bicubic => {
+        wf[0] = cubic_weight(f + 1.0)
+        wf[1] = cubic_weight(f)
+        wf[2] = cubic_weight(1.0 - f)
+        wf[3] = cubic_weight(2.0 - f)
+        i0 - 1
+      }
+      _ => {
+        wf[0] = 1.0 - f
+        wf[1] = f
+        i0
+      }
+    }
+    let mut sum = 0
+    let mut best = 0
+    for k in 0..<n {
+      let w = (wf[k] * RESAMPLE_ONE.to_double()).round().to_int()
+      weights[d * n + k] = w
+      sum += w
+      let bw = weights[d * n + best]
+      if w.abs() > bw.abs() {
+        best = k
+      }
+      offsets[d * n + k] = clamp_int(first + k, 0, src_len - 1) * stride
+    }
+    // Normalize the rounded weights so that they sum to exactly 1.0.
+    weights[d * n + best] += RESAMPLE_ONE - sum
+  }
+  { n, offsets, weights, }
+}
+
+///|
+/// Separable two-pass resampling with 14-bit fixed-point weights.
+///
+/// The horizontal pass writes RGBA samples as `Int` with
+/// 6 fractional bits (unclamped); the vertical pass
+/// rounds and clamps to 8 bits. An axis whose size does not change uses an
+/// identity tap, so the passes stay uniform.
+fn resize_separable(
   img : ImageData,
   new_width : Int32,
   new_height : Int32,
+  kind : ResizeMethod,
 ) -> ImageData {
-  let src = img.data.to_fixedarray()
-  let src_w = img.width.to_double()
-  let src_h = img.height.to_double()
-  let dst_w = new_width.to_double()
-  let dst_h = new_height.to_double()
-  let buf = FixedArray::make(new_width * new_height * 4, b'\x00')
-  for dy in 0..<new_height {
-    for dx in 0..<new_width {
-      let src_x = (dx.to_double() + 0.5) * src_w / dst_w - 0.5
-      let src_y = (dy.to_double() + 0.5) * src_h / dst_h - 0.5
-      let ix = src_x.to_int() - (if src_x < 0.0 { 1 } else { 0 })
-      let iy = src_y.to_int() - (if src_y < 0.0 { 1 } else { 0 })
-      let fx = src_x - ix.to_double()
-      let fy = src_y - iy.to_double()
-      let mut r_sum = 0.0
-      let mut g_sum = 0.0
-      let mut b_sum = 0.0
-      let mut a_sum = 0.0
-      for j in -1..<=2 {
-        let wy = cubic_weight(fy - j.to_double())
-        for i in -1..<=2 {
-          let wx = cubic_weight(fx - i.to_double())
-          let w = wx * wy
-          let (r, g, b, a) = get_pixel(
-            src,
-            img.width,
-            img.height,
-            ix + i,
-            iy + j,
-          )
-          r_sum += r.to_double() * w
-          g_sum += g.to_double() * w
-          b_sum += b.to_double() * w
-          a_sum += a.to_double() * w
-        }
-      }
-      let idx = (dy * new_width + dx) * 4
-      buf[idx] = clamp_to_byte(r_sum + 0.5)
-      buf[idx + 1] = clamp_to_byte(g_sum + 0.5)
-      buf[idx + 2] = clamp_to_byte(b_sum + 0.5)
-      buf[idx + 3] = clamp_to_byte(a_sum + 0.5)
-    }
+  let src_w = img.width
+  let src_h = img.height
+  // Horizontal pass: src_w x src_h -> new_width x src_h
+  let h_taps = ResampleTaps::new(src_w, new_width, kind, 4)
+  let row_len = new_width * 4
+  let inter = FixedArray::make(row_len * src_h, 0)
+  for y in 0..<src_h {
+    resample_row_h(
+      img.data,
+      y * src_w * 4,
+      inter,
+      y * row_len,
+      h_taps.offsets,
+      h_taps.weights,
+      h_taps.n,
+      new_width,
+    )
   }
-  { width: new_width, height: new_height, data: Bytes::from_array(buf), }
+  // Vertical pass: new_width x src_h -> new_width x new_height
+  let v_taps = ResampleTaps::new(src_h, new_height, kind, row_len)
+  let out = FixedArray::make(row_len * new_height, b'\x00')
+  for y in 0..<new_height {
+    resample_row_v(
+      inter,
+      out,
+      y * row_len,
+      v_taps.offsets,
+      v_taps.weights,
+      y * v_taps.n,
+      v_taps.n,
+      new_width,
+    )
+  }
+  { width: new_width, height: new_height, data: Bytes::from_array(out), }
 }
 
 ///|
@@ -215,7 +202,7 @@ pub fn resize(
   }
   match resize_method {
     Nearest => resize_nearest(img, new_width, new_height)
-    Bilinear => resize_bilinear(img, new_width, new_height)
-    Bicubic => resize_bicubic(img, new_width, new_height)
+    Bilinear | Bicubic =>
+      resize_separable(img, new_width, new_height, resize_method)
   }
 }
