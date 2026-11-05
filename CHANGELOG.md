@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.1
+
+- Decoders no longer panic on malformed input; they raise `DecodeError`.
+  Found with a new mutation fuzz test (`src/fuzz_wbtest.mbt`) and fixed:
+  - PNG: chunk lengths >= 2^31 (negative after conversion)
+  - JPEG: marker segments whose counts run past the segment (DQT / DHT /
+    SOF / SOS reads are now bounds-checked); DC/AC sizes > 16 rejected
+  - BMP: DIB header size / pixel offset >= 2^31, size arithmetic overflow
+  - ICO: directory `offset + size` overflow, oversized color counts
+- All decoders reject images larger than 2^27 pixels (134M px, e.g. 100 MP
+  photos still decode) with `UnsupportedFeature("image too large")`
+  instead of overflowing `width * height * 4`
+- PNG: the output buffer is allocated only after the IDAT size has been
+  validated, so a corrupt header cannot trigger a huge allocation
+
 ## 0.7.0
 
 - JPEG decode: progressive (SOF2) images, including spectral selection

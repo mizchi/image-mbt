@@ -98,7 +98,7 @@ fn parse_bmp_info(raw : Bytes) -> BmpDecodeInfo raise DecodeError {
       "unsupported DIB header size: " + dib_size.to_string(),
     )
   }
-  if raw.length() < 14 + dib_size {
+  if dib_size > raw.length() - 14 {
     raise CorruptData("BMP file too short")
   }
   let (width, raw_height, bpp, compression, colors_used) = if core {
@@ -115,8 +115,9 @@ fn parse_bmp_info(raw : Bytes) -> BmpDecodeInfo raise DecodeError {
   }
   let top_down = raw_height < 0
   let height = if top_down { -raw_height } else { raw_height }
-  if width <= 0 || height <= 0 {
-    raise CorruptData("invalid BMP dimensions")
+  check_decode_size(width, height)
+  if pixel_offset < 0 || pixel_offset > raw.length() {
+    raise CorruptData("BMP pixel offset beyond end of file")
   }
   match compression {
     BI_RGB =>
@@ -211,15 +212,16 @@ fn parse_bmp_info(raw : Bytes) -> BmpDecodeInfo raise DecodeError {
     }
     palette_len = n
   }
-  let padded_row_size = (width * bpp + 31) / 32 * 4
+  // Sizes in Int64: pixel_offset + row * height can exceed Int.
+  let padded_row_size64 = (width.to_int64() * bpp.to_int64() + 31L) / 32L * 4L
   if compression != BI_RLE8 && compression != BI_RLE4 {
-    let required_size = pixel_offset + padded_row_size * height
-    if raw.length() < required_size {
+    let required_size = pixel_offset.to_int64() +
+      padded_row_size64 * height.to_int64()
+    if raw.length().to_int64() < required_size {
       raise CorruptData("BMP file too short for pixel data")
     }
-  } else if pixel_offset > raw.length() {
-    raise CorruptData("BMP pixel offset beyond end of file")
   }
+  let padded_row_size = padded_row_size64.to_int()
   {
     width,
     height,

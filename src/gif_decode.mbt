@@ -218,9 +218,7 @@ fn decode_gif_impl(
   let flags = r.u8()
   ignore(r.u8()) // background color index
   ignore(r.u8()) // pixel aspect ratio
-  if width <= 0 || height <= 0 {
-    raise CorruptData("invalid GIF dimensions")
-  }
+  check_decode_size(width, height)
   let global_table = if (flags & 0x80) != 0 {
     Some(r.color_table(1 << ((flags & 7) + 1)))
   } else {
@@ -283,6 +281,9 @@ fn decode_gif_impl(
         let entries = table.length() / 3
         let min_code_size = r.u8()
         let lzw = r.sub_blocks()
+        if fw > 0 && fh > 0 {
+          check_decode_size(fw, fh)
+        }
         let indices = gif_lzw_decode(lzw, min_code_size, fw * fh)
         let saved = if disposal == 3 { Some(canvas.copy()) } else { None }
         // Draw

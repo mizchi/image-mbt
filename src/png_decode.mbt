@@ -43,9 +43,7 @@ fn parse_ihdr(data : Bytes) -> IhdrData raise DecodeError {
   let compression = data[10].to_int()
   let filter = data[11].to_int()
   let interlace = data[12].to_int()
-  if width <= 0 || height <= 0 {
-    raise CorruptData("invalid dimensions")
-  }
+  check_decode_size(width, height)
   validate_png_bit_depth(ct, bit_depth)
   if interlace != 0 && interlace != 1 {
     raise CorruptData("invalid interlace method: " + interlace.to_string())
@@ -75,7 +73,8 @@ fn parse_chunks(raw : Bytes) -> Array[PngChunk] raise DecodeError {
   while pos + 12 <= raw.length() {
     let length = read_u32be(raw, pos).reinterpret_as_int()
     let ct = chunk_type_str(raw, pos + 4)
-    if pos + 12 + length > raw.length() {
+    // Lengths >= 2^31 read as negative; compare without overflowing.
+    if length < 0 || length > raw.length() - pos - 12 {
       raise CorruptData("chunk extends beyond file")
     }
     // CRC covers chunk type + data
@@ -328,8 +327,14 @@ pub fn decode_png(raw : Bytes) -> ImageData raise DecodeError {
   let chunks = parse_chunks(raw)
   let ihdr = parse_png_ihdr(chunks)
   let (idat_parts, palette, trns) = collect_png_image_data(chunks)
-  let rgba_buf = FixedArray::make(ihdr.width * ihdr.height * 4, b'\x00')
+  // Allocate the output only once the first row arrives, i.e. after the
+  // decompressed size has been checked against the header, so that a
+  // corrupt header cannot make us allocate a huge buffer up front.
+  let mut rgba_buf : FixedArray[Byte] = []
   decode_png_scanlines(ihdr, idat_parts, palette, trns, fn(y, row) {
+    if y == 0 {
+      rgba_buf = FixedArray::make(ihdr.width * ihdr.height * 4, b'\x00')
+    }
     let dst_offset = y * ihdr.width * 4
     rgba_buf.blit_from_bytes(dst_offset, row, 0, ihdr.width * 4)
   })

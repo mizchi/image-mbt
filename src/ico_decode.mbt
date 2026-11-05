@@ -28,7 +28,7 @@ fn parse_ico_dir(raw : Bytes) -> Array[IcoEntry] raise DecodeError {
     let h = raw[e + 1].to_int()
     let size = read_u32le(raw, e + 8).reinterpret_as_int()
     let offset = read_u32le(raw, e + 12).reinterpret_as_int()
-    if size <= 0 || offset < 0 || offset + size > raw.length() {
+    if size <= 0 || offset < 0 || size > raw.length() - offset {
       raise CorruptData("ICO image " + i.to_string() + " out of bounds")
     }
     entries.push({
@@ -72,11 +72,15 @@ fn decode_ico_payload(data : Bytes) -> ImageData raise DecodeError {
   let bpp = read_u16le(data, 14)
   let compression = read_u32le(data, 16).reinterpret_as_int()
   let colors_used = read_u32le(data, 32).reinterpret_as_int()
-  if width <= 0 || height <= 0 {
-    raise CorruptData("invalid ICO bitmap dimensions")
-  }
+  check_decode_size(width, height)
   let palette_len = if bpp <= 8 {
-    (if colors_used > 0 { colors_used } else { 1 << bpp }) * 4
+    let max_entries = 1 << bpp
+    (if colors_used > 0 && colors_used < max_entries {
+      colors_used
+    } else {
+      max_entries
+    }) *
+    4
   } else {
     0
   }
@@ -86,8 +90,6 @@ fn decode_ico_payload(data : Bytes) -> ImageData raise DecodeError {
     0
   }
   let xor_offset = dib_size + masks_len + palette_len
-  let xor_row = (width * bpp + 31) / 32 * 4
-  let and_offset = xor_offset + xor_row * height
   // Wrap the DIB in a BMP file header with the height halved.
   let bmp = FixedArray::make(14 + data.length(), b'\x00')
   bmp[0] = b'\x42'
@@ -97,6 +99,9 @@ fn decode_ico_payload(data : Bytes) -> ImageData raise DecodeError {
   bmp.blit_from_bytes(14, data, 0, data.length())
   write_u32le(bmp, 14 + 8, height.reinterpret_as_uint())
   let img = decode_bmp(Bytes::from_array(bmp))
+  // decode_bmp validated bpp and that the XOR bitmap fits in `data`.
+  let xor_row = (width * bpp + 31) / 32 * 4
+  let and_offset = xor_offset + xor_row * height
   // 32-bit bitmaps carry real alpha; the AND mask only matters when there
   // is none (all alpha bytes zero, which decode_bmp treats as opaque).
   let use_mask = if bpp == 32 {
@@ -113,7 +118,9 @@ fn decode_ico_payload(data : Bytes) -> ImageData raise DecodeError {
     true
   }
   let and_row = (width + 31) / 32 * 4
-  if !use_mask || and_offset + and_row * height > data.length() {
+  if !use_mask ||
+    and_offset.to_int64() + and_row.to_int64() * height.to_int64() >
+    data.length().to_int64() {
     return img
   }
   let out = img.data.to_fixedarray()
