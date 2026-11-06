@@ -4,39 +4,72 @@
 // multiple scans and restart intervals (DRI/RST).
 
 ///|
+/// Entropy-coded data reader with a 32-bit lookahead buffer.
+///
+/// Bytes are unstuffed (0xFF 0x00 -> 0xFF) as they are loaded. At a marker
+/// or the end of the data the buffer is padded with zero bytes without
+/// consuming anything, so `pos` never moves past a marker; consuming any of
+/// those padding bits means the data is truncated or corrupt.
 priv struct JpegBitReader {
   data : Bytes
   mut pos : Int32
-  mut bit_buf : Int32
+  mut bit_buf : UInt32
+  /// Valid bits in `bit_buf` (the low `bits_left` bits, MSB first).
   mut bits_left : Int32
+  /// How many of the low bits of the buffer are zero padding.
+  mut pad_bits : Int32
 }
 
 ///|
 fn JpegBitReader::new(data : Bytes, pos : Int32) -> JpegBitReader {
-  { data, pos, bit_buf: 0, bits_left: 0, }
+  { data, pos, bit_buf: 0, bits_left: 0, pad_bits: 0, }
 }
 
 ///|
-fn JpegBitReader::next_byte(self : JpegBitReader) -> Int32 raise DecodeError {
-  if self.pos >= self.data.length() {
+/// Top up the buffer to at least 25 bits.
+fn JpegBitReader::fill(self : JpegBitReader) -> Unit {
+  let data = self.data
+  while self.bits_left <= 24 {
+    let mut b = 0
+    if self.pad_bits > 0 || self.pos >= data.length() {
+      self.pad_bits += 8
+    } else {
+      b = data[self.pos].to_int()
+      if b == 0xFF {
+        if self.pos + 1 < data.length() && data[self.pos + 1].to_int() == 0 {
+          self.pos += 2
+        } else {
+          // A marker: stop here and pad.
+          b = 0
+          self.pad_bits += 8
+        }
+      } else {
+        self.pos += 1
+      }
+    }
+    self.bit_buf = (self.bit_buf << 8) | b.reinterpret_as_uint()
+    self.bits_left += 8
+  }
+}
+
+///|
+/// The next `count` (<= 16) bits without consuming them.
+fn JpegBitReader::peek(self : JpegBitReader, count : Int32) -> Int32 {
+  if self.bits_left < count {
+    self.fill()
+  }
+  ((self.bit_buf >> (self.bits_left - count)) & ((1U << count) - 1)).reinterpret_as_int()
+}
+
+///|
+fn JpegBitReader::skip(
+  self : JpegBitReader,
+  count : Int32,
+) -> Unit raise DecodeError {
+  if self.bits_left - count < self.pad_bits {
     raise CorruptData("unexpected end of JPEG data")
   }
-  let b = self.data[self.pos].to_int()
-  self.pos += 1
-  // Handle byte stuffing: 0xFF 0x00 → 0xFF
-  if b == 0xFF {
-    if self.pos >= self.data.length() {
-      raise CorruptData("unexpected end of JPEG data after 0xFF")
-    }
-    let next = self.data[self.pos].to_int()
-    if next == 0x00 {
-      self.pos += 1
-      return 0xFF
-    }
-    // Marker found inside scan data - should not happen in valid baseline
-    raise CorruptData("unexpected marker in scan data: 0xFF" + next.to_string())
-  }
-  b
+  self.bits_left -= count
 }
 
 ///|
@@ -44,14 +77,12 @@ fn JpegBitReader::read_bits(
   self : JpegBitReader,
   count : Int32,
 ) -> Int32 raise DecodeError {
-  while self.bits_left < count {
-    let b = self.next_byte()
-    self.bit_buf = (self.bit_buf << 8) | b
-    self.bits_left += 8
+  if count == 0 {
+    return 0
   }
-  self.bits_left -= count
-  (self.bit_buf.reinterpret_as_uint() >> self.bits_left).reinterpret_as_int() &
-  ((1 << count) - 1)
+  let v = self.peek(count)
+  self.skip(count)
+  v
 }
 
 ///|
@@ -61,6 +92,7 @@ fn JpegBitReader::read_bits(
 fn JpegBitReader::restart(self : JpegBitReader) -> Unit raise DecodeError {
   self.bit_buf = 0
   self.bits_left = 0
+  self.pad_bits = 0
   let data = self.data
   while self.pos + 1 < data.length() &&
         data[self.pos].to_int() == 0xFF &&
@@ -82,12 +114,19 @@ fn JpegBitReader::read_bit(self : JpegBitReader) -> Int32 raise DecodeError {
 }
 
 ///|
+/// Bits resolved by the Huffman lookup table.
+const HUFF_LOOKUP_BITS : Int32 = 9
+
+///|
 priv struct HuffmanTable {
   // For each code length 1..16, store the symbols
   min_code : FixedArray[Int32] // min code value at each length
   max_code : FixedArray[Int32] // max code value at each length (-1 if none)
   val_ptr : FixedArray[Int32] // index into values for each length
   values : Array[Int32]
+  /// Indexed by the next HUFF_LOOKUP_BITS bits: (length << 8) | symbol for
+  /// codes of at most that length, 0 otherwise.
+  lookup : FixedArray[Int32]
 }
 
 ///|
@@ -98,19 +137,33 @@ fn build_huffman_table(
   let min_code = FixedArray::make(17, 0)
   let max_code = FixedArray::make(17, -1)
   let val_ptr = FixedArray::make(17, 0)
+  let lookup = FixedArray::make(1 << HUFF_LOOKUP_BITS, 0)
   let mut code = 0
   let mut vi = 0
   for length in 1..<=16 {
     val_ptr[length] = vi
     if bits[length] > 0 {
       min_code[length] = code
+      if length <= HUFF_LOOKUP_BITS {
+        let shift = HUFF_LOOKUP_BITS - length
+        for i in 0..<bits[length] {
+          let start = (code + i) << shift
+          let end = start + (1 << shift)
+          // Over-subscribed (invalid) tables may run past the table.
+          if end <= lookup.length() && vi + i < values.length() {
+            for j in start..<end {
+              lookup[j] = (length << 8) | values[vi + i]
+            }
+          }
+        }
+      }
       code += bits[length]
       max_code[length] = code - 1
       vi += bits[length]
     }
     code = code << 1
   }
-  { min_code, max_code, val_ptr, values, }
+  { min_code, max_code, val_ptr, values, lookup, }
 }
 
 ///|
@@ -118,12 +171,18 @@ fn decode_huffman(
   br : JpegBitReader,
   table : HuffmanTable,
 ) -> Int32 raise DecodeError {
-  let mut code = 0
-  for length in 1..<=16 {
-    code = (code << 1) | br.read_bit()
+  let e = table.lookup[br.peek(HUFF_LOOKUP_BITS)]
+  if e != 0 {
+    br.skip(e >> 8)
+    return e & 0xFF
+  }
+  // Longer codes: compare against the canonical code ranges.
+  let bits16 = br.peek(16)
+  for length in (HUFF_LOOKUP_BITS + 1)..<=16 {
+    let code = bits16 >> (16 - length)
     if table.max_code[length] >= 0 && code <= table.max_code[length] {
-      let idx = table.val_ptr[length] + code - table.min_code[length]
-      return table.values[idx]
+      br.skip(length)
+      return table.values[table.val_ptr[length] + code - table.min_code[length]]
     }
   }
   raise CorruptData("invalid Huffman code")
@@ -178,46 +237,6 @@ let idct_c : FixedArray[Double] = {
   let c = FixedArray::make(8, 1.0)
   c[0] = 1.0 / 2.0.sqrt()
   c
-}
-
-///|
-// IDCT using pre-computed cosine table (scalar reference).
-// Only referenced by tests on wasm, where the SIMD version is used.
-#warnings("-unused_value")
-fn idct_block_ref(
-  coeff : FixedArray[Int32],
-  output : FixedArray[Int32],
-) -> Unit {
-  let tmp = FixedArray::make(64, 0.0)
-  // First pass: columns
-  for x in 0..<8 {
-    for y in 0..<8 {
-      let mut sum = 0.0
-      for u in 0..<8 {
-        sum += idct_c[u] *
-          coeff[u * 8 + x].to_double() *
-          idct_cos_table[y * 8 + u]
-      }
-      tmp[y * 8 + x] = sum
-    }
-  }
-  // Second pass: rows
-  for y in 0..<8 {
-    for x in 0..<8 {
-      let mut sum = 0.0
-      for v in 0..<8 {
-        sum += idct_c[v] * tmp[y * 8 + v] * idct_cos_table[x * 8 + v]
-      }
-      let val = (sum / 4.0 + 128.0).to_int()
-      output[y * 8 + x] = if val < 0 {
-        0
-      } else if val > 255 {
-        255
-      } else {
-        val
-      }
-    }
-  }
 }
 
 ///|
@@ -327,15 +346,14 @@ fn JpegState::write_block(
   bx : Int32,
   by : Int32,
 ) -> Unit {
-  idct_block(self.block, self.idct_out)
   let stride = self.blocks_w[ci] * 8
-  let buf = self.comp_bufs[ci]
-  for yy in 0..<8 {
-    let row = (by * 8 + yy) * stride + bx * 8
-    for xx in 0..<8 {
-      buf[row + xx] = self.idct_out[yy * 8 + xx]
-    }
-  }
+  jpeg_idct(
+    self.block,
+    self.idct_out,
+    self.comp_bufs[ci],
+    by * 8 * stride + bx * 8,
+    stride,
+  )
 }
 
 ///|
@@ -879,56 +897,49 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   let mcu_cols = st.mcu_cols
   let ncomp = fi.components.length()
   let comp_bufs = st.comp_bufs
-  // Convert to RGBA
-  let out_buf = FixedArray::make(fi.width * fi.height * 4, b'\x00')
+  let width = fi.width
+  let height = fi.height
+  // Upsample every component to full resolution.
+  let planes = Array::makei(ncomp, fn(ci) {
+    let c = fi.components[ci]
+    jpeg_upsample(
+      comp_bufs[ci],
+      mcu_cols * c.h_sample * 8,
+      (width * c.h_sample + fi.max_h - 1) / fi.max_h,
+      (height * c.v_sample + fi.max_v - 1) / fi.max_v,
+      c.h_sample,
+      c.v_sample,
+      fi.max_h,
+      fi.max_v,
+      width,
+      height,
+    )
+  })
+  let out_buf = FixedArray::make(width * height * 4, b'\xFF')
   if ncomp == 1 {
-    // Grayscale
-    for y in 0..<fi.height {
-      for x in 0..<fi.width {
-        let comp_stride = mcu_cols * fi.components[0].h_sample * 8
-        let v = comp_bufs[0][y * comp_stride + x]
-        let val = clamp_byte(v)
-        let idx = (y * fi.width + x) * 4
-        out_buf[idx] = val
-        out_buf[idx + 1] = val
-        out_buf[idx + 2] = val
-        out_buf[idx + 3] = b'\xFF'
-      }
+    let p = planes[0]
+    for i in 0..<(width * height) {
+      let v = p[i].to_byte()
+      out_buf[i * 4] = v
+      out_buf[i * 4 + 1] = v
+      out_buf[i * 4 + 2] = v
     }
   } else {
-    // YCbCr to RGB
-    let c0 = fi.components[0]
-    let c1 = fi.components[1]
-    let c2 = fi.components[2]
-    let stride_y = mcu_cols * c0.h_sample * 8
-    let stride_cb = mcu_cols * c1.h_sample * 8
-    let stride_cr = mcu_cols * c2.h_sample * 8
-    for py in 0..<fi.height {
-      for px in 0..<fi.width {
-        // Map pixel to component coordinates (handle subsampling)
-        let yy = comp_bufs[0][py * stride_y + px]
-        let cb_x = px * c1.h_sample / fi.max_h
-        let cb_y = py * c1.v_sample / fi.max_v
-        let cr_x = px * c2.h_sample / fi.max_h
-        let cr_y = py * c2.v_sample / fi.max_v
-        let cb = comp_bufs[1][cb_y * stride_cb + cb_x]
-        let cr = comp_bufs[2][cr_y * stride_cr + cr_x]
-        // YCbCr to RGB conversion
-        let y_val = yy.to_double()
-        let cb_val = (cb - 128).to_double()
-        let cr_val = (cr - 128).to_double()
-        let r = (y_val + 1.402 * cr_val).to_int()
-        let g = (y_val - 0.344136 * cb_val - 0.714136 * cr_val).to_int()
-        let b = (y_val + 1.772 * cb_val).to_int()
-        let idx = (py * fi.width + px) * 4
-        out_buf[idx] = clamp_byte(r)
-        out_buf[idx + 1] = clamp_byte(g)
-        out_buf[idx + 2] = clamp_byte(b)
-        out_buf[idx + 3] = b'\xFF'
-      }
+    // YCbCr -> RGB with libjpeg's fixed-point tables.
+    let t = jpeg_ycc_tables
+    let py = planes[0]
+    let pcb = planes[1]
+    let pcr = planes[2]
+    for i in 0..<(width * height) {
+      let y = py[i]
+      let cb = pcb[i]
+      let cr = pcr[i]
+      out_buf[i * 4] = clamp_byte(y + t.cr_r[cr])
+      out_buf[i * 4 + 1] = clamp_byte(y + ((t.cb_g[cb] + t.cr_g[cr]) >> 16))
+      out_buf[i * 4 + 2] = clamp_byte(y + t.cb_b[cb])
     }
   }
-  { width: fi.width, height: fi.height, data: Bytes::from_array(out_buf), }
+  { width, height, data: Bytes::from_array(out_buf), }
 }
 
 ///|

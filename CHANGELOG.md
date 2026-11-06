@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0
+
+- JPEG decode output is now identical to libjpeg / libjpeg-turbo (e.g.
+  Pillow): islow integer IDCT, "fancy" triangle-filter chroma upsampling
+  for 4:2:0 / 4:2:2 / 4:4:0, and libjpeg's fixed-point YCbCr -> RGB.
+  Previously chroma was upsampled nearest-neighbor (differences up to 157
+  on 4:2:0 images)
+- JPEG decode is 2.4-3.7x faster: 9-bit Huffman lookup table with a
+  32-bit bit buffer, the integer IDCT (about 80 multiplies per block
+  instead of ~2000 Double operations) and, on wasm, an i32x4 SIMD IDCT
+  (256x256: native 6.3 -> 1.7 ms, js 15.9 -> 6.7 ms, wasm 7.2 -> 2.4 ms)
+
 ## 0.7.1
 
 - Decoders no longer panic on malformed input; they raise `DecodeError`.

@@ -12,7 +12,7 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 - **ICO** decode (PNG / BMP payloads, AND mask) / encode (single-image, PNG payload)
 - **AVIF** encode (js target MVP, opaque still image)
 - **Resize** with Nearest / Bilinear / Bicubic interpolation (fixed-point, separable)
-- **wasm SIMD** fast paths for PNG filters / color expansion, JPEG (I)DCT and resize on the `wasm` target
+- **wasm SIMD** fast paths for PNG filters / color expansion, JPEG DCT / IDCT and resize on the `wasm` target
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer). Decoders raise `DecodeError` on malformed input (covered by a mutation fuzz test) and reject images larger than 2^27 pixels.
 
@@ -104,7 +104,7 @@ pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFram
 |---|---|---|---|---|
 | PNG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: grayscale / RGB / indexed / alpha at 1-16 bit, `tRNS`, Adam7; RGBA8 normalize, stream decode |
 | BMP | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: 1/2/4/8/16/24/32-bit, RLE4/RLE8, bit fields, V2-V5 / OS/2 headers; encode: 32-bit BGRA |
-| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan |
+| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan; output identical to libjpeg |
 | GIF | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: GIF87a/89a, interlace, transparency, animation (disposal 1-3, delays, loop count); encode: single-frame, `<=256` colors, alpha `0/255` only |
 | WebP | no | yes | `js` / `native` / `wasm` / `wasm-gc` | lossless still-image encoder |
 | ICO | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: ICO/CUR, PNG or BMP payloads with AND mask; encode: single PNG payload, `<=256x256` |
