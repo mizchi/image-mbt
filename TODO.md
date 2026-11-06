@@ -26,7 +26,10 @@
 
 ## Next
 
-- [ ] WebP lossy encode: segments / perceptual (SSIM) tuning, faster mode search
+- [ ] WebP lossy encode: perceptual tuning. Segments with SNS-style
+  quantizer offsets (either direction) and chroma quantizer deltas were
+  tried and lowered PSNR and luma SSIM against a uniform quantizer, so they
+  are not used; a perceptual metric beyond PSNR / SSIM would be needed
 - [ ] WebP lossless encoder: cross-color transform, meta prefix codes, faster search
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)

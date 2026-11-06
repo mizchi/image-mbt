@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.1
+
+- `encode_webp_lossy` is ~35% faster with identical output (no full-buffer
+  clears per 4x4 trial, a zero-level fast path in the quantizer, table-
+  driven probability-update costs). 64x64: 0.86 -> 0.54 ms native,
+  2.6 -> 1.9 ms js
+
 ## 0.17.0
 
 - `encode_webp_lossy`: rate-distortion optimized mode decisions (each
