@@ -185,29 +185,53 @@ fn vp8_quantize(
   lo : Int32,
 ) -> Int32 {
   let mut last = -1
-  for n in 0..<16 {
+  // Rounding bias: a bit under 1/2 (DC) or 1/3 (AC) of a step. Levels
+  // below the zero threshold skip the division.
+  let ac_bias = ac_q * 11 / 32
+  let ac_zero = ac_q - ac_bias
+  if first == 0 {
+    let c = coeffs[o]
+    let a = if c < 0 { -c } else { c }
+    let dc_bias = dc_q * 7 / 16
+    if a + dc_bias < dc_q {
+      levels[lo] = 0
+      coeffs[o] = 0
+    } else {
+      let l = vp8_min_int((a + dc_bias) / dc_q, 2047)
+      let v = if c < 0 { -l } else { l }
+      levels[lo] = v
+      coeffs[o] = v * dc_q
+      last = 0
+    }
+  } else {
+    // The DC position belongs to the Y2 block; the caller keeps it.
+    levels[lo] = 0
+  }
+  for n in 1..<16 {
     let pos = vp8_zigzag[n]
-    let q = if n == 0 { dc_q } else { ac_q }
     let c = coeffs[o + pos]
-    if n < first {
+    let a = if c < 0 { -c } else { c }
+    if a < ac_zero {
       levels[lo + n] = 0
+      coeffs[o + pos] = 0
       continue
     }
-    let a = if c < 0 { -c } else { c }
-    // Rounding bias: a bit under 1/2 (DC) or 1/3 (AC) of a step.
-    let bias = if n == 0 { q * 7 / 16 } else { q * 11 / 32 }
-    let mut l = (a + bias) / q
-    if l > 2047 {
-      l = 2047
-    }
+    let l = vp8_min_int((a + ac_bias) / ac_q, 2047)
     let v = if c < 0 { -l } else { l }
     levels[lo + n] = v
-    coeffs[o + pos] = v * q
-    if l != 0 {
-      last = n
-    }
+    coeffs[o + pos] = v * ac_q
+    last = n
   }
   last
+}
+
+///|
+fn vp8_min_int(a : Int32, b : Int32) -> Int32 {
+  if a < b {
+    a
+  } else {
+    b
+  }
 }
 
 ///|
@@ -1021,7 +1045,6 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
         for ri in 0..<vp8_i4_candidates {
           let mode = rank[ri]
           vp8_predict4(pred, d, mode)
-          coeffs.fill(0)
           vp8_fdct(src, d, pred, d, coeffs, 0)
           let last = vp8_quantize(coeffs, 0, y1_dc, y1_ac, 0, tl, 0)
           if last >= 0 {
@@ -1039,7 +1062,6 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
         imodes[n] = best
         cost4 += best_cost
         vp8_predict4(yuv, d, best)
-        coeffs.fill(0)
         vp8_fdct(src, d, yuv, d, coeffs, 0)
         last4[n] = vp8_quantize(coeffs, 0, y1_dc, y1_ac, 0, lv4, n * 16)
         if last4[n] >= 0 {
@@ -1236,12 +1258,12 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
       let np = vp8_clip(255 - n1[i] * 255 / total, 255)
       let np = if np < 1 { 1 } else { np }
       let old = proba[i]
-      let old_cost = n0[i] * vp8_bit_cost(false, old) +
-        n1[i] * vp8_bit_cost(true, old) +
-        vp8_bit_cost(false, up)
-      let new_cost = n0[i] * vp8_bit_cost(false, np) +
-        n1[i] * vp8_bit_cost(true, np) +
-        vp8_bit_cost(true, up) +
+      let old_cost = n0[i] * vp8_cost0[old] +
+        n1[i] * vp8_cost1[old] +
+        vp8_cost0[up]
+      let new_cost = n0[i] * vp8_cost0[np] +
+        n1[i] * vp8_cost1[np] +
+        vp8_cost1[up] +
         8 * 256
       if np != old && new_cost < old_cost {
         ignore(bw.put_bit(true, up))
