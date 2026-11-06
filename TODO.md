@@ -22,10 +22,11 @@
 - [x] zlib output-size limits on decode
 - [x] WebP decode (lossy, lossless, alpha, animation; libwebp-exact)
 - [x] Animated WebP encode (lossless frames)
+- [x] WebP lossy encode (VP8)
 
 ## Next
 
-- [ ] WebP lossy encode
+- [ ] WebP lossy encode: segments, rate-distortion mode decisions, alpha filtering
 - [ ] WebP lossless encoder: cross-color transform, meta prefix codes, faster search
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)

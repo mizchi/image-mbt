@@ -585,7 +585,24 @@ fn vp8l_encode(img : ImageData) -> Bytes {
     }
     argb[i] = (a << 24) | (r << 16) | (g << 8) | b
   }
+  vp8l_encode_argb(argb, w, h, has_alpha, true)
+}
+
+///|
+/// Encode ARGB pixels as a VP8L stream; without `with_header` the 5-byte
+/// image header is left out (the form used inside ALPH chunks).
+fn vp8l_encode_argb(
+  argb : FixedArray[Int32],
+  w : Int32,
+  h : Int32,
+  has_alpha : Bool,
+  with_header : Bool,
+) -> Bytes {
+  let n = w * h
   let header = fn(bw : WebPBitWriter) {
+    if !with_header {
+      return
+    }
     bw.put_bits(0x2F, 8)
     bw.put_bits(w - 1, 14)
     bw.put_bits(h - 1, 14)
@@ -668,7 +685,8 @@ fn vp8l_encode(img : ImageData) -> Bytes {
       consider(bw)
     }
   }
-  // Candidates 2 / 3: subtract green, with or without the predictor.
+  // Other candidates: predictor and / or subtract green (subtract green
+  // hurts images whose color lives in one channel, e.g. alpha planes).
   let sg = FixedArray::make(n, 0)
   for i in 0..<n {
     let c = argb[i]
@@ -678,24 +696,32 @@ fn vp8l_encode(img : ImageData) -> Bytes {
       ((c - g) & 0xff)
   }
   let pbits = if w * h >= 64 * 64 { 4 } else { 3 }
-  let (res, modes) = vp8l_predict_image(sg, w, h, pbits)
-  for use_pred in [true, false] {
-    let main = if use_pred { res } else { sg }
-    let lz = vp8l_lz77(main, w)
-    for cache_bits in [0, 10] {
-      let bw = WebPBitWriter::new()
-      header(bw)
-      bw.put_bits(1, 1)
-      bw.put_bits(2, 2) // subtract green
-      if use_pred {
-        bw.put_bits(1, 1)
-        bw.put_bits(0, 2) // predictor
-        bw.put_bits(pbits - 2, 3)
-        vp8l_write_image(bw, modes, vp8l_subsample(w, pbits), 0, None, false)
+  for use_sg in [true, false] {
+    let base = if use_sg { sg } else { argb }
+    let (res, modes) = vp8l_predict_image(base, w, h, pbits)
+    for use_pred in [true, false] {
+      if !use_sg && !use_pred {
+        continue // the palette or the other candidates cover this
       }
-      bw.put_bits(0, 1)
-      vp8l_write_image(bw, main, w, cache_bits, Some(lz), true)
-      consider(bw)
+      let main = if use_pred { res } else { base }
+      let lz = vp8l_lz77(main, w)
+      for cache_bits in [0, 10] {
+        let bw = WebPBitWriter::new()
+        header(bw)
+        if use_sg {
+          bw.put_bits(1, 1)
+          bw.put_bits(2, 2) // subtract green
+        }
+        if use_pred {
+          bw.put_bits(1, 1)
+          bw.put_bits(0, 2) // predictor
+          bw.put_bits(pbits - 2, 3)
+          vp8l_write_image(bw, modes, vp8l_subsample(w, pbits), 0, None, false)
+        }
+        bw.put_bits(0, 1)
+        vp8l_write_image(bw, main, w, cache_bits, Some(lz), true)
+        consider(bw)
+      }
     }
   }
   best.unwrap()
