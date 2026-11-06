@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.0
+
+- WebP lossless encoder:
+  - cost-based LZ77: a shortest-path parse over literals, cache hits and
+    copies, with symbol costs from the previous parse (2 passes; the
+    cache may also start from a cache-only parse)
+  - meta prefix codes: tile histograms clustered greedily by estimated bits
+  - cross-color transform (per-tile multipliers chosen by residual bits)
+  - transform candidates ranked by a quick estimate before the full parse
+  Files are ~8% smaller (vs libwebp's default lossless mode: x1.019 ->
+  x0.941 on our test set; vs `-m 6`: x1.077 -> x0.995); encoding is ~2.3-3.5x
+  slower (64x64: 5.1 ms native, 20.6 ms js, 16.6 ms wasm)
+
 ## 0.18.0
 
 - WebP lossless encoder: LZ77 also tries the 24 nearest 2-D distance
