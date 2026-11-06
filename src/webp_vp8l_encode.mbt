@@ -287,25 +287,29 @@ fn vp8l_lz77(
     }
     l
   }
-  let mut i = 0
-  while i < n {
+  // Short 2-D distances (the cheapest plane codes) are always tried.
+  let near : Array[Int32] = []
+  for c in 1..<=vp8l_near_codes {
+    let d = vp8l_plane_distance(xsize, c)
+    if !near.contains(d) {
+      near.push(d)
+    }
+  }
+  let find = fn(i : Int32) -> (Int32, Int32) {
     let mut best_len = 0
     let mut best_dist = 0
-    // Cheap candidates first: the previous pixel and the pixel above.
-    if i >= 1 {
-      best_len = match_len(i, i - 1)
-      best_dist = 1
-    }
-    if xsize > 1 && i >= xsize {
-      let l = match_len(i, i - xsize)
-      if l > best_len {
-        best_len = l
-        best_dist = xsize
+    for d in near {
+      if d <= i {
+        let l = match_len(i, i - d)
+        if l > best_len {
+          best_len = l
+          best_dist = d
+        }
       }
     }
     if i + 1 < n {
       let mut cand = head[hash(i)]
-      let mut tries = 32
+      let mut tries = vp8l_chain_tries
       while cand >= 0 && tries > 0 && i - cand <= max_dist {
         let l = match_len(i, cand)
         if l > best_len {
@@ -316,11 +320,19 @@ fn vp8l_lz77(
         tries -= 1
       }
     }
-    if best_len >= 3 {
+    (best_len, best_dist)
+  }
+  let mut i = 0
+  while i < n {
+    let (best_len, best_dist) = find(i)
+    insert(i)
+    // Lazy matching: a clearly longer match one pixel later wins.
+    if best_len >= 3 &&
+      !(best_len < 64 && i + 1 < n && find(i + 1).0 > best_len + 1) {
       kinds.push(2)
       aa.push(best_len)
       bb.push(best_dist)
-      for k in 0..<best_len {
+      for k in 1..<best_len {
         insert(i + k)
       }
       i += best_len
@@ -328,12 +340,19 @@ fn vp8l_lz77(
       kinds.push(0)
       aa.push(i)
       bb.push(0)
-      insert(i)
       i += 1
     }
   }
   (kinds, aa, bb)
 }
+
+///|
+/// LZ77 search: the nearest plane codes always tried, and the depth of the
+/// hash chain.
+let vp8l_near_codes = 24
+
+///|
+let vp8l_chain_tries = 32
 
 ///|
 /// Map distances to plane codes for an image of width `xsize`.
@@ -501,6 +520,34 @@ fn vp8l_sub_pixels(a : Int32, b : Int32) -> Int32 {
 }
 
 ///|
+/// Prior for the predictor statistics: counts (width - |v|) * scale.
+let vp8l_pred_prior_width = 16
+
+///|
+let vp8l_pred_prior_scale = 4
+
+///|
+/// log2(x) * 256 (fixed point) for x >= 1, in 32-bit arithmetic (Int64 is
+/// slow on the js target).
+fn vp8l_log2_fix(x : Int32) -> Int32 {
+  let mut ip = 0
+  while ip < 30 && 2 << ip <= x {
+    ip += 1
+  }
+  // Mantissa in [1, 2) with 15 fractional bits, refined by squaring.
+  let mut m = (if ip <= 15 { x << (15 - ip) } else { x >> (ip - 15) }).reinterpret_as_uint()
+  let mut frac = 0
+  for k in 0..<8 {
+    m = (m * m) >> 15
+    if m >= 2U << 15 {
+      m = m >> 1
+      frac = frac | (1 << (7 - k))
+    }
+  }
+  ip * 256 + frac
+}
+
+///|
 /// Choose a predictor mode per tile and return (residuals, mode image).
 fn vp8l_predict_image(
   px : FixedArray[Int32],
@@ -513,12 +560,41 @@ fn vp8l_predict_image(
   let modes = FixedArray::make(tw * th, 0)
   let res = FixedArray::make(w * h, 0)
   let size = 1 << bits
+  // Residual histograms (A, R, G, B) of the tiles decided so far.
+  // A prior peaked at residual 0 keeps the first tiles from locking the
+  // statistics onto a bad mode.
+  let acc = FixedArray::makei(4 * 256, fn(i) {
+    let v = i & 0xff
+    let d = if v >= 128 { 256 - v } else { v }
+    if d < vp8l_pred_prior_width {
+      (vp8l_pred_prior_width - d) * vp8l_pred_prior_scale
+    } else {
+      0
+    }
+  })
+  let acc_total = FixedArray::make(4, 0)
+  for k in 0..<4 {
+    for v in 0..<256 {
+      acc_total[k] += acc[k * 256 + v]
+    }
+  }
+  let cost_tab = FixedArray::make(4 * 256, 0)
   for ty in 0..<th {
     for tx in 0..<tw {
       let x0 = tx * size
       let y0 = ty * size
       let x1 = if x0 + size > w { w } else { x0 + size }
       let y1 = if y0 + size > h { h } else { y0 + size }
+      // Each mode is scored by the bits its residuals would take under
+      // the residual statistics accumulated so far (libwebp-style), which
+      // favors modes that keep the histograms peaked.
+      for k in 0..<4 {
+        let t = acc_total[k] + 256
+        let lt = vp8l_log2_fix(t)
+        for v in 0..<256 {
+          cost_tab[k * 256 + v] = lt - vp8l_log2_fix(acc[k * 256 + v] + 1)
+        }
+      }
       let mut best = 0
       let mut best_cost = 0x7fffffff
       for mode in 0..<14 {
@@ -530,10 +606,10 @@ fn vp8l_predict_image(
             }
             let pos = y * w + x
             let r = vp8l_sub_pixels(px[pos], vp8l_predict(mode, px, pos, w))
-            for k in 0..<4 {
-              let c = (r >> (k * 8)) & 0xff
-              cost += if c >= 128 { 256 - c } else { c }
-            }
+            cost += cost_tab[(r >> 24) & 0xff] +
+              cost_tab[256 + ((r >> 16) & 0xff)] +
+              cost_tab[512 + ((r >> 8) & 0xff)] +
+              cost_tab[768 + (r & 0xff)]
           }
         }
         if cost < best_cost {
@@ -542,6 +618,22 @@ fn vp8l_predict_image(
         }
       }
       modes[ty * tw + tx] = 0xff000000 | (best << 8)
+      for y in y0..<y1 {
+        for x in x0..<x1 {
+          if x == 0 || y == 0 {
+            continue
+          }
+          let pos = y * w + x
+          let r = vp8l_sub_pixels(px[pos], vp8l_predict(best, px, pos, w))
+          acc[(r >> 24) & 0xff] += 1
+          acc[256 + ((r >> 16) & 0xff)] += 1
+          acc[512 + ((r >> 8) & 0xff)] += 1
+          acc[768 + (r & 0xff)] += 1
+          for k in 0..<4 {
+            acc_total[k] += 1
+          }
+        }
+      }
     }
   }
   for y in 0..<h {
@@ -673,7 +765,7 @@ fn vp8l_encode_argb(
       }
     }
     let lz = vp8l_lz77(packed, pw)
-    for cache_bits in [0, 8] {
+    for cache_bits in [0, 4, 6, 8] {
       let bw = WebPBitWriter::new()
       header(bw)
       bw.put_bits(1, 1)
@@ -695,33 +787,41 @@ fn vp8l_encode_argb(
       ((((c >> 16) - g) & 0xff) << 16) |
       ((c - g) & 0xff)
   }
-  let pbits = if w * h >= 64 * 64 { 4 } else { 3 }
-  for use_sg in [true, false] {
-    let base = if use_sg { sg } else { argb }
-    let (res, modes) = vp8l_predict_image(base, w, h, pbits)
-    for use_pred in [true, false] {
-      if !use_sg && !use_pred {
-        continue // the palette or the other candidates cover this
+  // Candidates: subtract green alone, and the predictor (tile sizes 2^3 to
+  // 2^5) with or without subtract green, each with several cache sizes.
+  let emit = fn(
+    use_sg : Bool,
+    pred : (Int32, FixedArray[Int32])?,
+    main : FixedArray[Int32],
+    lz : (Array[Int32], Array[Int32], Array[Int32]),
+  ) {
+    for cache_bits in [0, 8] {
+      let bw = WebPBitWriter::new()
+      header(bw)
+      if use_sg {
+        bw.put_bits(1, 1)
+        bw.put_bits(2, 2) // subtract green
       }
-      let main = if use_pred { res } else { base }
-      let lz = vp8l_lz77(main, w)
-      for cache_bits in [0, 10] {
-        let bw = WebPBitWriter::new()
-        header(bw)
-        if use_sg {
-          bw.put_bits(1, 1)
-          bw.put_bits(2, 2) // subtract green
-        }
-        if use_pred {
+      match pred {
+        Some((pbits, modes)) => {
           bw.put_bits(1, 1)
           bw.put_bits(0, 2) // predictor
           bw.put_bits(pbits - 2, 3)
           vp8l_write_image(bw, modes, vp8l_subsample(w, pbits), 0, None, false)
         }
-        bw.put_bits(0, 1)
-        vp8l_write_image(bw, main, w, cache_bits, Some(lz), true)
-        consider(bw)
+        None => ()
       }
+      bw.put_bits(0, 1)
+      vp8l_write_image(bw, main, w, cache_bits, Some(lz), true)
+      consider(bw)
+    }
+  }
+  emit(true, None, sg, vp8l_lz77(sg, w))
+  for pbits in [4] {
+    for use_sg in [true, false] {
+      let base = if use_sg { sg } else { argb }
+      let (res, modes) = vp8l_predict_image(base, w, h, pbits)
+      emit(use_sg, Some((pbits, modes)), res, vp8l_lz77(res, w))
     }
   }
   best.unwrap()

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.0
+
+- WebP lossless encoder: LZ77 also tries the 24 nearest 2-D distance
+  codes and uses lazy matching; predictor modes are chosen by the bits of
+  their residuals under the statistics accumulated so far (with a prior
+  at 0); more color-cache sizes are tried. Files are ~5% smaller (vs
+  libwebp's default lossless mode: x1.070 -> x1.019 on our test set);
+  encoding is ~2x slower (64x64: 2.2 ms native, 5.9 ms js)
+
 ## 0.17.1
 
 - `encode_webp_lossy` is ~35% faster with identical output (no full-buffer
