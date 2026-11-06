@@ -1,6 +1,6 @@
 # mizchi/image
 
-Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF, encode PNG / JPEG / GIF / BMP / WebP / ICO / AVIF, and resize. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
+Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF, encode PNG / APNG / JPEG / GIF / BMP / WebP / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
 
@@ -16,9 +16,14 @@ moon add mizchi/image
 // Auto-detect PNG / JPEG / GIF / BMP / ICO / TIFF
 let img = @image.decode_image(image_bytes)
 
+// Photos: apply the EXIF orientation so they display upright
+let photo = @image.decode_image_upright(jpeg_bytes)
+
 // Resize and re-encode
 let resized = @image.resize(img, 128, 128, Bilinear)
 let png = @image.encode_png(resized)
+// Smallest exact PNG color type, best compression
+let small_png = @image.encode_png(resized, color=Auto, compression=Best)
 
 // JPEG encode (quality defaults to 85, subsampling to Yuv444)
 let jpg = @image.encode_jpeg(resized)
@@ -37,6 +42,10 @@ for frame in apng.frames {
 }
 let gif_anim = @image.decode_gif_frames(gif_bytes)
 
+// Encode animations (every frame is a full canvas)
+let apng_out = @image.encode_apng(apng)
+let gif_out = @image.encode_gif_animation(apng)
+
 // Stream decode, row by row (PNG / BMP)
 let rows : Array[Bytes] = []
 let info = @image.decode_image_stream(
@@ -50,9 +59,9 @@ inspect((info.format, info.width, info.height))
 
 | Format | Decode | Encode | Animation | Stream decode |
 |---|---|---|---|---|
-| PNG | yes | yes (RGBA8) | APNG decode | yes |
+| PNG | yes | yes (RGBA / RGB / gray / gray+alpha / palette) | APNG decode / encode | yes |
 | JPEG | yes | yes | n/a | no |
-| GIF | yes | yes (single frame) | decode | no |
+| GIF | yes | yes | decode / encode | no |
 | BMP | yes | yes (32-bit) | n/a | yes |
 | ICO / CUR | yes | yes (ICO, PNG payload) | n/a | no |
 | TIFF | yes (first image) | no | n/a | no |
@@ -63,21 +72,22 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 
 ### Details
 
-- **PNG** decode: grayscale / RGB / palette / gray+alpha / RGBA at 1, 2, 4, 8 and 16 bits (16-bit uses the high byte), `tRNS` transparency, Adam7 interlace. **APNG** (`decode_png_frames`): `fcTL` / `fdAT`, dispose none / background / previous, blend source / over; `decode_png` returns the default image. Encode: RGBA8 with adaptive row filtering.
+- **PNG** decode: grayscale / RGB / palette / gray+alpha / RGBA at 1, 2, 4, 8 and 16 bits (16-bit uses the high byte), `tRNS` transparency, Adam7 interlace. **APNG** (`decode_png_frames`): `fcTL` / `fdAT`, dispose none / background / previous, blend source / over; `decode_png` returns the default image. Encode: RGBA8 by default, or RGB / gray / gray+alpha / palette (1-8 bit, `tRNS`) / `Auto`, with adaptive row filtering and four compression levels. `encode_apng` writes APNG from an `Animation`, cropping each frame to the changed region.
 - **JPEG** decode: baseline, extended sequential and progressive (8-bit, Huffman), any sampling factors, multiple scans, restart markers. Output is identical to libjpeg / libjpeg-turbo (islow IDCT, fancy upsampling, fixed-point color conversion). Encode: baseline with 4:4:4 / 4:2:2 / 4:2:0; the entropy-coded data is identical to libjpeg's for the same quality and subsampling (standard Huffman tables).
-- **GIF** decode: GIF87a / 89a, global and local color tables, interlace, transparency, animation with disposal 1-3, delays and the NETSCAPE loop count (frames are composited onto a transparent canvas, like browsers). Encode: single frame, at most 256 colors, alpha 0 or 255.
+- **GIF** decode: GIF87a / 89a, global and local color tables, interlace, transparency, animation with disposal 1-3, delays and the NETSCAPE loop count (frames are composited onto a transparent canvas, like browsers). Encode: LZW-compressed; `encode_gif` for one image and `encode_gif_animation` for an `Animation` (global or local palettes, changed-region cropping). At most 256 colors per frame, alpha 0 or 255.
 - **BMP** decode: 1 / 2 / 4 / 8-bit palette, RLE4 / RLE8, 16 / 24 / 32-bit, `BI_BITFIELDS` / `BI_ALPHABITFIELDS`, V2-V5 and OS/2 headers. Encode: 32-bit BGRA.
 - **ICO / CUR** decode: PNG or BMP (DIB) payloads with the AND mask; `decode_ico` returns the largest image, `decode_ico_all` every image. Encode: one image up to 256x256 with a PNG payload.
 - **TIFF** decode (first image): little / big endian, strips and tiles, chunky and planar samples, None / LZW / Deflate / PackBits with the horizontal predictor, WhiteIsZero / BlackIsZero / RGB / palette / CMYK, 1-16 bits per sample, extra alpha (associated alpha is un-premultiplied).
 - **WebP** encode: lossless (VP8L) still images.
 - **AVIF** encode: `js` target MVP for opaque images; needs browser AVIF canvas support or a local `ffmpeg`.
 - **Resize**: Nearest, and fixed-point separable Bilinear / Bicubic.
+- **EXIF orientation**: `read_exif_orientation` reads the tag from JPEG, PNG (`eXIf`) and TIFF; `apply_orientation` applies it with the same mapping as Pillow's `exif_transpose`; `decode_image_upright` does both.
 
 ### Not supported
 
-- JPEG: arithmetic coding, lossless and hierarchical modes, 12-bit samples, CMYK / Adobe 4-component files; EXIF orientation is not applied.
+- JPEG: arithmetic coding, lossless and hierarchical modes, 12-bit samples, CMYK / Adobe 4-component files. Decoders return stored pixels; use `decode_image_upright` / `apply_orientation` for EXIF orientation.
 - TIFF: JPEG / CCITT and other compressions, BigTIFF, floating-point samples, pages after the first.
-- WebP and AVIF decode; animated GIF / APNG encode.
+- WebP and AVIF decode.
 - Color management (ICC profiles, gamma) is not applied.
 
 Unsupported inputs raise `DecodeError::UnsupportedFeature`.
@@ -85,7 +95,7 @@ Unsupported inputs raise `DecodeError::UnsupportedFeature`.
 ## Robustness and compatibility
 
 - Decoders raise `DecodeError` on malformed input instead of panicking. This is covered by a mutation fuzz test over every format.
-- Images larger than 2^27 pixels (134M) are rejected with `UnsupportedFeature("image too large")`.
+- Images larger than 2^27 pixels (134M) are rejected with `UnsupportedFeature("image too large")`, and PNG / TIFF zlib data is never inflated beyond the size the header implies.
 - Decoders are tested against Pillow (libjpeg-turbo, libtiff, libpng) fixtures. JPEG decode and encode are checked for exact equality with libjpeg.
 - On the `wasm` (linear memory) target, hot loops use 128-bit SIMD through inline WAT: PNG filters and color expansion, JPEG IDCT / FDCT, and resize. Other targets run scalar code that gives identical output. A wasm runtime with SIMD support is required.
 
@@ -100,7 +110,8 @@ pub fn decode_image_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> StreamImage
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
 pub fn decode_png_frames(Bytes) -> Animation raise DecodeError
 pub fn decode_png_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> IhdrData raise DecodeError
-pub fn encode_png(ImageData) -> Bytes raise EncodeError
+pub fn encode_png(ImageData, color? : PngColorMode = Rgba, compression? : PngCompression = Default) -> Bytes raise EncodeError
+pub fn encode_apng(Animation) -> Bytes raise EncodeError
 
 // JPEG
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
@@ -110,6 +121,7 @@ pub fn encode_jpeg(ImageData, quality? : Int = 85, subsampling? : JpegSubsamplin
 pub fn decode_gif(Bytes) -> ImageData raise DecodeError
 pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
+pub fn encode_gif_animation(Animation) -> Bytes raise EncodeError
 
 // BMP
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
@@ -128,8 +140,11 @@ pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
-// Resize
+// Resize / orientation
 pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
+pub fn read_exif_orientation(Bytes) -> Int?
+pub fn apply_orientation(ImageData, Int) -> ImageData
+pub fn decode_image_upright(Bytes) -> ImageData raise DecodeError
 ```
 
 ### Types
@@ -138,6 +153,8 @@ pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 pub(all) struct ImageData { width : Int; height : Int; data : Bytes } // RGBA8
 pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 pub(all) enum JpegSubsampling { Yuv444; Yuv422; Yuv420 }
+pub(all) enum PngColorMode { Rgba; Rgb; Gray; GrayAlpha; Palette; Auto }
+pub(all) enum PngCompression { Stored; Fast; Default; Best }
 pub(all) struct Animation { width : Int; height : Int; frames : Array[AnimationFrame]; plays : Int } // plays: 0 = forever
 pub(all) struct AnimationFrame { image : ImageData; delay_ms : Int }
 pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFrame]; loop_count : Int? }
