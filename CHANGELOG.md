@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+- `encode_webp_lossy`: rate-distortion optimized mode decisions (each
+  candidate is quantized and reconstructed, scored as SSE + lambda * token
+  bits); ALPH chunks pick the best spatial filter (none / horizontal /
+  vertical / gradient); `quality` now follows libwebp's scale (similar file
+  sizes for the same setting). Files are ~9% smaller at equal PSNR than in
+  0.16 (now ~3% smaller than libwebp's on the test set); encoding is ~3x
+  slower (64x64: 0.86 ms native, 2.6 ms js)
+
 ## 0.16.1
 
 - wasm: SIMD VP8 loop filter (16 lanes, identical output); lossy WebP
