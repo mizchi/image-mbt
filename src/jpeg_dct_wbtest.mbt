@@ -1,28 +1,4 @@
 ///|
-// On wasm, fdct_block runs the f64x2 kernel; it must be bit-identical to
-// the scalar reference.
-test "jpeg fdct: SIMD/dispatch matches scalar reference" {
-  let mut seed = 99
-  for _ in 0..<64 {
-    let pixels = FixedArray::make(64, 0)
-    for i in 0..<64 {
-      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
-      pixels[i] = (seed >> 16) & 0xFF
-    }
-    let f_ref = FixedArray::make(64, 0.0)
-    let f_got = FixedArray::make(64, 0.0)
-    fdct_block_ref(pixels, f_ref)
-    fdct_block(pixels, f_got)
-    for i in 0..<64 {
-      assert_eq(
-        f_got[i].reinterpret_as_int64(),
-        f_ref[i].reinterpret_as_int64(),
-      )
-    }
-  }
-}
-
-///|
 // On wasm, jpeg_idct runs the i32x4 kernel; it must be bit-identical to the
 // scalar libjpeg port, including blocks that hit the zero-AC shortcuts.
 test "jpeg idct: SIMD/dispatch matches scalar islow" {
@@ -72,4 +48,28 @@ test "jpeg upsample: h1v2 fancy (4:4:0) matches libjpeg's formula" {
     (0 + 2) >> 2,
   ]
   assert_eq(out, expect)
+}
+
+///|
+// On wasm, jpeg_fdct runs the i32x4 kernel; it must be bit-identical to the
+// scalar libjpeg port.
+test "jpeg fdct: SIMD/dispatch matches scalar islow" {
+  let mut seed = 11
+  for round in 0..<200 {
+    let a = FixedArray::make(64, 0)
+    for i in 0..<64 {
+      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+      // level-shifted samples, plus flat and extreme blocks
+      a[i] = match round % 3 {
+        0 => ((seed >> 16) & 0xFF) - 128
+        1 => if (seed >> 20) % 2 == 0 { -128 } else { 127 }
+        _ => 37
+      }
+    }
+    let expect = a.copy()
+    let got = a.copy()
+    jpeg_fdct_islow(expect)
+    jpeg_fdct(got)
+    assert_eq(got, expect)
+  }
 }

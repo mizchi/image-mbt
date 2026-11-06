@@ -160,73 +160,9 @@ let jpeg_huff_vals_ac_chroma : FixedArray[Int32] = [
 ]
 
 ///|
-fn round_to_int(v : Double) -> Int32 {
-  if v >= 0.0 {
-    (v + 0.5).to_int()
-  } else {
-    (v - 0.5).to_int()
-  }
-}
-
-///|
-fn clamp_u8(v : Int32) -> Int32 {
-  v.clamp(min=0, max=255)
-}
-
-///|
 fn write_u16be(buf : FixedArray[Byte], offset : Int32, value : Int32) -> Unit {
   buf[offset] = ((value >> 8) & 0xFF).to_byte()
   buf[offset + 1] = (value & 0xFF).to_byte()
-}
-
-///|
-fn rgba_to_ycbcr(r : Int32, g : Int32, b : Int32) -> (Int32, Int32, Int32) {
-  let y = round_to_int(
-    0.299 * r.to_double() + 0.587 * g.to_double() + 0.114 * b.to_double(),
-  )
-  let cb = round_to_int(
-    -0.168736 * r.to_double() -
-    0.331264 * g.to_double() +
-    0.5 * b.to_double() +
-    128.0,
-  )
-  let cr = round_to_int(
-    0.5 * r.to_double() -
-    0.418688 * g.to_double() -
-    0.081312 * b.to_double() +
-    128.0,
-  )
-  (clamp_u8(y), clamp_u8(cb), clamp_u8(cr))
-}
-
-///|
-// Forward DCT matching the decoder's idct_cos_table / idct_c convention.
-// Scalar reference; see jpeg_dct_simd.mbt for the wasm SIMD version.
-// Only referenced by tests on wasm, where the SIMD version is used.
-#warnings("-unused_value")
-fn fdct_block_ref(
-  input : FixedArray[Int32],
-  output : FixedArray[Double],
-) -> Unit {
-  let tmp = FixedArray::make(64, 0.0)
-  for y in 0..<8 {
-    for v in 0..<8 {
-      let mut sum = 0.0
-      for x in 0..<8 {
-        sum += (input[y * 8 + x] - 128).to_double() * idct_cos_table[x * 8 + v]
-      }
-      tmp[y * 8 + v] = sum
-    }
-  }
-  for u in 0..<8 {
-    for v in 0..<8 {
-      let mut sum = 0.0
-      for y in 0..<8 {
-        sum += tmp[y * 8 + v] * idct_cos_table[y * 8 + u]
-      }
-      output[u * 8 + v] = 0.25 * idct_c[u] * idct_c[v] * sum
-    }
-  }
 }
 
 ///|
@@ -242,19 +178,6 @@ fn jpeg_scale_quant_table(
     out[i] = v.clamp(min=1, max=255)
   }
   out
-}
-
-///|
-fn quantize_and_zigzag(
-  dct : FixedArray[Double],
-  quant : FixedArray[Int32],
-  output : FixedArray[Int32],
-) -> Unit {
-  for i in 0..<64 {
-    let idx = jpeg_zigzag[i]
-    let q = quant[idx].to_double()
-    output[i] = round_to_int(dct[idx] / q)
-  }
 }
 
 ///|
@@ -301,16 +224,18 @@ fn encode_ac(
   coeffs : FixedArray[Int32],
   table : HuffmanEncodeTable,
 ) -> Unit {
+  // Like libjpeg's encode_one_block: ZRL (16 zeros) is only emitted when a
+  // nonzero coefficient follows; trailing zeros are a single EOB.
   let mut run = 0
   for i in 1..<64 {
     let v = coeffs[i]
     if v == 0 {
       run += 1
-      if run == 16 {
-        bw.write_bits(table.codes[0xF0], table.lengths[0xF0])
-        run = 0
-      }
     } else {
+      while run > 15 {
+        bw.write_bits(table.codes[0xF0], table.lengths[0xF0])
+        run -= 16
+      }
       let cat = jpeg_bit_category(v)
       let symbol = (run << 4) | cat
       bw.write_bits(table.codes[symbol], table.lengths[symbol])
@@ -364,7 +289,11 @@ fn jpeg_marker_dqt(id : Int32, quant : FixedArray[Int32]) -> Bytes {
 }
 
 ///|
-fn jpeg_marker_sof0(width : Int32, height : Int32) -> Bytes {
+fn jpeg_marker_sof0(
+  width : Int32,
+  height : Int32,
+  luma_sampling : Int32,
+) -> Bytes {
   let buf = FixedArray::make(19, b'\x00')
   buf[0] = b'\xFF'
   buf[1] = b'\xC0'
@@ -375,7 +304,7 @@ fn jpeg_marker_sof0(width : Int32, height : Int32) -> Bytes {
   buf[9] = b'\x03' // components
   // Y
   buf[10] = b'\x01'
-  buf[11] = b'\x11'
+  buf[11] = luma_sampling.to_byte()
   buf[12] = b'\x00'
   // Cb
   buf[13] = b'\x02'
@@ -439,35 +368,42 @@ fn jpeg_marker_eoi() -> Bytes {
 }
 
 ///|
-fn encode_component_block(
-  bw : JpegBitWriter,
-  input : FixedArray[Int32],
-  dct : FixedArray[Double],
-  coeffs : FixedArray[Int32],
-  quant : FixedArray[Int32],
-  dc_table : HuffmanEncodeTable,
-  ac_table : HuffmanEncodeTable,
-  prev_dc : FixedArray[Int32],
-  comp_idx : Int32,
-) -> Unit {
-  fdct_block(input, dct)
-  quantize_and_zigzag(dct, quant, coeffs)
-  let diff = coeffs[0] - prev_dc[comp_idx]
-  prev_dc[comp_idx] = coeffs[0]
-  encode_dc(bw, diff, dc_table)
-  encode_ac(bw, coeffs, ac_table)
+/// Chroma subsampling for `encode_jpeg`.
+pub(all) enum JpegSubsampling {
+  /// No subsampling (best quality).
+  Yuv444
+  /// Chroma halved horizontally.
+  Yuv422
+  /// Chroma halved horizontally and vertically (smallest files; libjpeg's
+  /// default).
+  Yuv420
 }
 
 ///|
+/// Encode a baseline JPEG (RGB from RGBA8; alpha is ignored).
+///
+/// The pipeline follows libjpeg (fixed-point color conversion, libjpeg's
+/// downsampling, islow integer FDCT and quantization, standard Huffman
+/// tables), so for the same quality and subsampling the entropy-coded data
+/// is identical to libjpeg's (e.g. Pillow with `optimize=False`).
 pub fn encode_jpeg(
   img : ImageData,
   quality~ : Int32 = 85,
+  subsampling~ : JpegSubsampling = Yuv444,
 ) -> Bytes raise EncodeError {
   let width = img.width
   let height = img.height
   if width <= 0 || height <= 0 {
     raise InvalidDimensions(
       "width and height must be positive: " +
+      width.to_string() +
+      "x" +
+      height.to_string(),
+    )
+  }
+  if width > 65535 || height > 65535 {
+    raise InvalidDimensions(
+      "JPEG dimensions must be <= 65535: " +
       width.to_string() +
       "x" +
       height.to_string(),
@@ -482,11 +418,16 @@ pub fn encode_jpeg(
       img.data.length().to_string(),
     )
   }
-
+  let (hs, vs) = match subsampling {
+    Yuv444 => (1, 1)
+    Yuv422 => (2, 1)
+    Yuv420 => (2, 2)
+  }
   let q = quality.clamp(min=1, max=100)
   let quant_luma = jpeg_scale_quant_table(jpeg_std_lum_quant, q)
   let quant_chroma = jpeg_scale_quant_table(jpeg_std_chrom_quant, q)
-
+  let div_luma = JpegQuantDivisors::new(quant_luma)
+  let div_chroma = JpegQuantDivisors::new(quant_chroma)
   let dc_luma = build_huffman_encode_table(
     jpeg_huff_bits_dc_luma, jpeg_huff_vals_dc_luma,
   )
@@ -499,13 +440,12 @@ pub fn encode_jpeg(
   let ac_chroma = build_huffman_encode_table(
     jpeg_huff_bits_ac_chroma, jpeg_huff_vals_ac_chroma,
   )
-
   let parts : Array[Bytes] = []
   parts.push(jpeg_marker_soi())
   parts.push(jpeg_marker_app0())
   parts.push(jpeg_marker_dqt(0, quant_luma))
   parts.push(jpeg_marker_dqt(1, quant_chroma))
-  parts.push(jpeg_marker_sof0(width, height))
+  parts.push(jpeg_marker_sof0(width, height, (hs << 4) | vs))
   parts.push(
     jpeg_marker_dht(0, 0, jpeg_huff_bits_dc_luma, jpeg_huff_vals_dc_luma),
   )
@@ -520,50 +460,98 @@ pub fn encode_jpeg(
   )
   parts.push(jpeg_marker_sos())
 
+  // Color conversion and downsampling. Luma covers ceil(W/8) x ceil(H/8)
+  // blocks; chroma covers one block per MCU.
+  let mcu_cols = (width + 8 * hs - 1) / (8 * hs)
+  let mcu_rows = (height + 8 * vs - 1) / (8 * vs)
+  let (yp, cbp, crp) = jpeg_rgb_to_ycc(img.data, width * height)
+  let y_bw = (width + 7) / 8
+  let y_bh = (height + 7) / 8
+  let y_plane = jpeg_downsample(yp, width, height, 1, 1, y_bw * 8, y_bh * 8)
+  let c_stride = mcu_cols * 8
+  let cb_plane = jpeg_downsample(
+    cbp,
+    width,
+    height,
+    hs,
+    vs,
+    c_stride,
+    mcu_rows * 8,
+  )
+  let cr_plane = jpeg_downsample(
+    crp,
+    width,
+    height,
+    hs,
+    vs,
+    c_stride,
+    mcu_rows * 8,
+  )
   let bw = JpegBitWriter::new()
   let prev_dc = FixedArray::make(3, 0)
-  let y_block = FixedArray::make(64, 0)
-  let cb_block = FixedArray::make(64, 0)
-  let cr_block = FixedArray::make(64, 0)
-  let dct = FixedArray::make(64, 0.0)
-  let coeffs = FixedArray::make(64, 0)
-  let mcu_cols = (width + 7) / 8
-  let mcu_rows = (height + 7) / 8
-
-  for mcu_y in 0..<mcu_rows {
-    for mcu_x in 0..<mcu_cols {
-      for by in 0..<8 {
-        for bx in 0..<8 {
-          let px = (mcu_x * 8 + bx).clamp(min=0, max=width - 1)
-          let py = (mcu_y * 8 + by).clamp(min=0, max=height - 1)
-          let idx = (py * width + px) * 4
-          let r = img.data[idx].to_int()
-          let g = img.data[idx + 1].to_int()
-          let b = img.data[idx + 2].to_int()
-          let (y, cb, cr) = rgba_to_ycbcr(r, g, b)
-          let block_idx = by * 8 + bx
-          y_block[block_idx] = y
-          cb_block[block_idx] = cb
-          cr_block[block_idx] = cr
+  let work = FixedArray::make(64, 0)
+  let coefs = FixedArray::make(64, 0)
+  // Encode the block at (bx, by) of `plane`, or a dummy block (zero AC,
+  // DC = previous block's DC) outside the component, like jccoefct.c.
+  let encode_block = fn(
+    plane : FixedArray[Int32],
+    stride : Int32,
+    bx : Int32,
+    by : Int32,
+    real : Bool,
+    quant : JpegQuantDivisors,
+    ci : Int32,
+    dc_table : HuffmanEncodeTable,
+    ac_table : HuffmanEncodeTable,
+  ) {
+    if real {
+      for yy in 0..<8 {
+        let row = (by * 8 + yy) * stride + bx * 8
+        for xx in 0..<8 {
+          work[yy * 8 + xx] = plane[row + xx] - 128
         }
       }
-
-      encode_component_block(
-        bw, y_block, dct, coeffs, quant_luma, dc_luma, ac_luma, prev_dc, 0,
+      jpeg_fdct(work)
+      jpeg_quantize(work, quant, coefs)
+    } else {
+      let dc = prev_dc[ci]
+      coefs.fill(0)
+      coefs[0] = dc
+    }
+    encode_dc(bw, coefs[0] - prev_dc[ci], dc_table)
+    prev_dc[ci] = coefs[0]
+    encode_ac(bw, coefs, ac_table)
+  }
+  for my in 0..<mcu_rows {
+    for mx in 0..<mcu_cols {
+      for v in 0..<vs {
+        for h in 0..<hs {
+          let bx = mx * hs + h
+          let by = my * vs + v
+          encode_block(
+            y_plane,
+            y_bw * 8,
+            bx,
+            by,
+            bx < y_bw && by < y_bh,
+            div_luma,
+            0,
+            dc_luma,
+            ac_luma,
+          )
+        }
+      }
+      encode_block(
+        cb_plane, c_stride, mx, my, true, div_chroma, 1, dc_chroma, ac_chroma,
       )
-      encode_component_block(
-        bw, cb_block, dct, coeffs, quant_chroma, dc_chroma, ac_chroma, prev_dc, 1,
-      )
-      encode_component_block(
-        bw, cr_block, dct, coeffs, quant_chroma, dc_chroma, ac_chroma, prev_dc, 2,
+      encode_block(
+        cr_plane, c_stride, mx, my, true, div_chroma, 2, dc_chroma, ac_chroma,
       )
     }
   }
-
   bw.flush()
   parts.push(bw.to_bytes())
   parts.push(jpeg_marker_eoi())
-
   let mut total_len = 0
   for p in parts {
     total_len += p.length()

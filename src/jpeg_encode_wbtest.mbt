@@ -1,19 +1,11 @@
 ///|
-test "jpeg_encode rgba_to_ycbcr white black red" {
-  let (y_w, cb_w, cr_w) = rgba_to_ycbcr(255, 255, 255)
-  assert_true((y_w - 255).abs() <= 1)
-  assert_true((cb_w - 128).abs() <= 1)
-  assert_true((cr_w - 128).abs() <= 1)
-
-  let (y_b, cb_b, cr_b) = rgba_to_ycbcr(0, 0, 0)
-  assert_true(y_b <= 1)
-  assert_true((cb_b - 128).abs() <= 1)
-  assert_true((cr_b - 128).abs() <= 1)
-
-  let (y_r, cb_r, cr_r) = rgba_to_ycbcr(255, 0, 0)
-  assert_true((y_r - 76).abs() <= 1)
-  assert_true((cb_r - 85).abs() <= 2)
-  assert_true((cr_r - 255).abs() <= 1)
+test "jpeg_encode rgb to ycc matches libjpeg" {
+  // white, black, red, (12, 200, 99)
+  let px = b"\xFF\xFF\xFF\xFF\x00\x00\x00\xFF\xFF\x00\x00\xFF\x0C\xC8\x63\xFF"
+  let (y, cb, cr) = jpeg_rgb_to_ycc(px, 4)
+  assert_eq(y, [255, 0, 76, 132])
+  assert_eq(cb, [128, 128, 85, 109])
+  assert_eq(cr, [128, 128, 255, 42])
 }
 
 ///|
@@ -40,13 +32,12 @@ test "jpeg_encode jpeg_bit_category basic" {
 }
 
 ///|
-test "jpeg_encode fdct_block constant has dc only" {
-  let input = FixedArray::make(64, 150)
-  let dct = FixedArray::make(64, 0.0)
-  fdct_block(input, dct)
-
-  assert_true(dct[0] > 170.0 && dct[0] < 182.0)
+test "jpeg_encode islow fdct of a constant block has dc only" {
+  // 150 - 128 = 22; the islow FDCT output is scaled by 8: DC = 22 * 8 * 8.
+  let data = FixedArray::make(64, 22)
+  jpeg_fdct_islow(data)
+  assert_eq(data[0], 1408)
   for i in 1..<64 {
-    assert_true(dct[i].abs() < 0.01)
+    assert_eq(data[i], 0)
   }
 }
