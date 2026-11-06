@@ -226,3 +226,24 @@ test "bytes_per_pixel" {
   assert_eq(bytes_per_pixel(GrayscaleAlpha, 8), 2)
   assert_eq(bytes_per_pixel(Indexed, 8), 1)
 }
+
+///|
+/// Largest image (in pixels) the decoders will allocate: 2^27 (134M px,
+/// enough for 100 MP photos). Keeps `width * height * 4` well inside Int and
+/// stops corrupt headers from requesting huge buffers.
+const MAX_DECODE_PIXELS : Int64 = 134217728L
+
+///|
+/// Validate image dimensions read from a header before allocating.
+fn check_decode_size(width : Int32, height : Int32) -> Unit raise DecodeError {
+  if width <= 0 || height <= 0 {
+    raise CorruptData(
+      "invalid dimensions: " + width.to_string() + "x" + height.to_string(),
+    )
+  }
+  if width.to_int64() * height.to_int64() > MAX_DECODE_PIXELS {
+    raise UnsupportedFeature(
+      "image too large: " + width.to_string() + "x" + height.to_string(),
+    )
+  }
+}

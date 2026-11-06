@@ -14,7 +14,7 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 - **Resize** with Nearest / Bilinear / Bicubic interpolation (fixed-point, separable)
 - **wasm SIMD** fast paths for PNG filters / color expansion, JPEG (I)DCT and resize on the `wasm` target
 
-All decoded images are normalized to `ImageData` (RGBA8 buffer).
+All decoded images are normalized to `ImageData` (RGBA8 buffer). Decoders raise `DecodeError` on malformed input (covered by a mutation fuzz test) and reject images larger than 2^27 pixels.
 
 On the `wasm` (linear memory) target, hot loops use 128-bit SIMD via inline WAT; other targets use scalar code that produces identical output. Requires a wasm runtime with SIMD support.
 

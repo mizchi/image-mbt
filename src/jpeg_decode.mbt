@@ -134,6 +134,9 @@ fn receive_extend(br : JpegBitReader, nbits : Int32) -> Int32 raise DecodeError 
   if nbits == 0 {
     return 0
   }
+  if nbits > 16 {
+    raise CorruptData("invalid JPEG coefficient size: " + nbits.to_string())
+  }
   let value = br.read_bits(nbits)
   if value < 1 << (nbits - 1) {
     // negative
@@ -681,15 +684,26 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       break
     }
     let seg_len = read_u16be_at(data, pos)
-    if pos + seg_len > data.length() {
+    let seg_end = pos + seg_len
+    if seg_len < 2 || seg_end > data.length() {
       raise CorruptData("JPEG segment extends beyond end of data")
+    }
+    // Every read inside a marker segment is bounds-checked against it.
+    let seg_byte = fn(i : Int32) -> Int32 raise DecodeError {
+      if i < pos || i >= seg_end {
+        raise CorruptData("JPEG marker segment too short")
+      }
+      data[i].to_int()
+    }
+    let seg_u16 = fn(i : Int32) -> Int32 raise DecodeError {
+      (seg_byte(i) << 8) | seg_byte(i + 1)
     }
     if marker == 0xDB {
       // DQT - Define Quantization Table
       let mut qpos = pos + 2
       let qend = pos + seg_len
       while qpos < qend {
-        let pq_tq = data[qpos].to_int()
+        let pq_tq = seg_byte(qpos)
         let tq = pq_tq & 0x03
         let pq = pq_tq >> 4
         qpos += 1
@@ -697,13 +711,13 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         if pq == 0 {
           // 8-bit
           for i in 0..<64 {
-            qt[jpeg_zigzag[i]] = data[qpos + i].to_int()
+            qt[jpeg_zigzag[i]] = seg_byte(qpos + i)
           }
           qpos += 64
         } else {
           // 16-bit
           for i in 0..<64 {
-            qt[jpeg_zigzag[i]] = read_u16be_at(data, qpos + i * 2)
+            qt[jpeg_zigzag[i]] = seg_u16(qpos + i * 2)
           }
           qpos += 128
         }
@@ -715,15 +729,15 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       if state is Some(_) {
         raise CorruptData("multiple SOF markers")
       }
-      let precision = data[pos + 2].to_int()
+      let precision = seg_byte(pos + 2)
       if precision != 8 {
         raise UnsupportedFeature(
           "unsupported bit depth: " + precision.to_string(),
         )
       }
-      let height = read_u16be_at(data, pos + 3)
-      let width = read_u16be_at(data, pos + 5)
-      let ncomp = data[pos + 7].to_int()
+      let height = seg_u16(pos + 3)
+      let width = seg_u16(pos + 5)
+      let ncomp = seg_byte(pos + 7)
       if ncomp != 3 && ncomp != 1 {
         raise UnsupportedFeature(
           "unsupported component count: " + ncomp.to_string(),
@@ -732,19 +746,20 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       if width <= 0 || height <= 0 {
         raise UnsupportedFeature("JPEG without dimensions in SOF (DNL)")
       }
+      check_decode_size(width, height)
       let components : Array[JpegComponent] = []
       let mut max_h = 1
       let mut max_v = 1
       for i in 0..<ncomp {
         let coff = pos + 8 + i * 3
-        let id = data[coff].to_int()
-        let sampling = data[coff + 1].to_int()
+        let id = seg_byte(coff)
+        let sampling = seg_byte(coff + 1)
         let h = sampling >> 4
         let v = sampling & 0x0F
         if h < 1 || h > 4 || v < 1 || v > 4 {
           raise CorruptData("invalid JPEG sampling factors")
         }
-        let qid = data[coff + 2].to_int() & 0x03
+        let qid = seg_byte(coff + 2) & 0x03
         if h > max_h {
           max_h = h
         }
@@ -763,26 +778,26 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       raise UnsupportedFeature(kind + " JPEG not supported")
     } else if marker == 0xDD {
       // DRI - Define Restart Interval (in MCUs, 0 = disabled)
-      restart_interval = read_u16be_at(data, pos + 2)
+      restart_interval = seg_u16(pos + 2)
     } else if marker == 0xC4 {
       // DHT - Define Huffman Table
       let mut hpos = pos + 2
       let hend = pos + seg_len
       while hpos < hend {
-        let tc_th = data[hpos].to_int()
+        let tc_th = seg_byte(hpos)
         let tc = tc_th >> 4 // 0=DC, 1=AC
         let th = tc_th & 0x03
         hpos += 1
         let bits = FixedArray::make(17, 0)
         let mut total = 0
         for i in 1..<=16 {
-          bits[i] = data[hpos + i - 1].to_int()
+          bits[i] = seg_byte(hpos + i - 1)
           total += bits[i]
         }
         hpos += 16
         let values : Array[Int32] = []
         for i in 0..<total {
-          values.push(data[hpos + i].to_int())
+          values.push(seg_byte(hpos + i))
         }
         hpos += total
         let table = build_huffman_table(bits, values)
@@ -799,15 +814,15 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
         None => raise MissingChunk("SOF must precede SOS")
       }
       let fi = st.fi
-      let ns = data[pos + 2].to_int()
+      let ns = seg_byte(pos + 2)
       if ns < 1 || ns > fi.components.length() {
         raise CorruptData("invalid JPEG scan component count")
       }
       let components : Array[JpegScanComponent] = []
       for i in 0..<ns {
         let soff = pos + 3 + i * 2
-        let cs = data[soff].to_int()
-        let td_ta = data[soff + 1].to_int()
+        let cs = seg_byte(soff)
+        let td_ta = seg_byte(soff + 1)
         let mut comp_idx = -1
         for j in 0..<fi.components.length() {
           if fi.components[j].id == cs {
@@ -825,10 +840,10 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       }
       let p = pos + 3 + ns * 2
       let scan : JpegScan = if st.progressive {
-        let ss = data[p].to_int()
-        let se = data[p + 1].to_int()
-        let ah = data[p + 2].to_int() >> 4
-        let al = data[p + 2].to_int() & 0x0F
+        let ss = seg_byte(p)
+        let se = seg_byte(p + 1)
+        let ah = seg_byte(p + 2) >> 4
+        let al = seg_byte(p + 2) & 0x0F
         if ss > se || se > 63 || (ss == 0 && se != 0) || (ss > 0 && ns != 1) {
           raise CorruptData("invalid progressive JPEG scan parameters")
         }
