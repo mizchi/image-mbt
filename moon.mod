@@ -1,6 +1,6 @@
 name = "mizchi/image"
 
-version = "0.9.0"
+version = "0.10.0"
 
 import {
   "mizchi/zlib@0.4.10",
@@ -21,6 +21,8 @@ keywords = [
   "png",
   "webp",
   "ico",
+  "tiff",
+  "apng",
   "avif",
   "encoder",
   "decoder",

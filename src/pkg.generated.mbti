@@ -26,7 +26,11 @@ pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
 
+pub fn decode_png_frames(Bytes) -> Animation raise DecodeError
+
 pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData raise DecodeError
+
+pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
@@ -67,6 +71,18 @@ pub fn EncodeError::to_string(Self) -> String
 pub impl Show for EncodeError
 
 // Types and methods
+pub(all) struct Animation {
+  width : Int32
+  height : Int32
+  frames : Array[AnimationFrame]
+  plays : Int32
+}
+
+pub(all) struct AnimationFrame {
+  image : ImageData
+  delay_ms : Int32
+}
+
 #derive(Eq, @debug.Debug)
 pub enum ColorType {
   Grayscale
