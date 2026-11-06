@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.1
+
+- wasm: SIMD VP8 loop filter (16 lanes, identical output); lossy WebP
+  decode is ~30% faster on the `wasm` target
+
 ## 0.16.0
 
 - `encode_webp_lossy(img, quality~ : Int = 75)`: lossy WebP (VP8 key frame)

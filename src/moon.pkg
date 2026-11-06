@@ -19,5 +19,8 @@ options(
     "png_filter_simd.mbt": [ "wasm" ],
     "resize_scalar.mbt": [ "not", "wasm" ],
     "resize_simd.mbt": [ "wasm" ],
+    "webp_vp8_filter_scalar.mbt": [ "not", "wasm" ],
+    "webp_vp8_filter_simd.mbt": [ "wasm" ],
+    "webp_vp8_filter_simd_wbtest.mbt": [ "wasm" ],
   },
 )

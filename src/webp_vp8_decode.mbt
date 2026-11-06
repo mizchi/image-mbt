@@ -649,182 +649,6 @@ fn vp8_check_mode(mb_x : Int32, mb_y : Int32, mode : Int32) -> Int32 {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Loop filter (on the full-frame planes).
-
-///|
-fn vp8_sclip1(v : Int32) -> Int32 {
-  if v < -128 {
-    -128
-  } else if v > 127 {
-    127
-  } else {
-    v
-  }
-}
-
-///|
-fn vp8_sclip2(v : Int32) -> Int32 {
-  if v < -16 {
-    -16
-  } else if v > 15 {
-    15
-  } else {
-    v
-  }
-}
-
-///|
-fn vp8_do_filter2(p : FixedArray[Byte], i : Int32, step : Int32) -> Unit {
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  let a = 3 * (q0 - p0) + vp8_sclip1(p1 - q1)
-  let a1 = vp8_sclip2((a + 4) >> 3)
-  let a2 = vp8_sclip2((a + 3) >> 3)
-  p[i - step] = vp8_clip8(p0 + a2).to_byte()
-  p[i] = vp8_clip8(q0 - a1).to_byte()
-}
-
-///|
-fn vp8_do_filter4(p : FixedArray[Byte], i : Int32, step : Int32) -> Unit {
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  let a = 3 * (q0 - p0)
-  let a1 = vp8_sclip2((a + 4) >> 3)
-  let a2 = vp8_sclip2((a + 3) >> 3)
-  let a3 = (a1 + 1) >> 1
-  p[i - 2 * step] = vp8_clip8(p1 + a3).to_byte()
-  p[i - step] = vp8_clip8(p0 + a2).to_byte()
-  p[i] = vp8_clip8(q0 - a1).to_byte()
-  p[i + step] = vp8_clip8(q1 - a3).to_byte()
-}
-
-///|
-fn vp8_do_filter6(p : FixedArray[Byte], i : Int32, step : Int32) -> Unit {
-  let p2 = p[i - 3 * step].to_int()
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  let q2 = p[i + 2 * step].to_int()
-  let a = vp8_sclip1(3 * (q0 - p0) + vp8_sclip1(p1 - q1))
-  let a1 = (27 * a + 63) >> 7
-  let a2 = (18 * a + 63) >> 7
-  let a3 = (9 * a + 63) >> 7
-  p[i - 3 * step] = vp8_clip8(p2 + a3).to_byte()
-  p[i - 2 * step] = vp8_clip8(p1 + a2).to_byte()
-  p[i - step] = vp8_clip8(p0 + a1).to_byte()
-  p[i] = vp8_clip8(q0 - a1).to_byte()
-  p[i + step] = vp8_clip8(q1 - a2).to_byte()
-  p[i + 2 * step] = vp8_clip8(q2 - a3).to_byte()
-}
-
-///|
-fn vp8_hev(
-  p : FixedArray[Byte],
-  i : Int32,
-  step : Int32,
-  thresh : Int32,
-) -> Bool {
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  (p1 - p0).abs() > thresh || (q1 - q0).abs() > thresh
-}
-
-///|
-fn vp8_needs_filter(
-  p : FixedArray[Byte],
-  i : Int32,
-  step : Int32,
-  t : Int32,
-) -> Bool {
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  4 * (p0 - q0).abs() + (p1 - q1).abs() <= t
-}
-
-///|
-fn vp8_needs_filter2(
-  p : FixedArray[Byte],
-  i : Int32,
-  step : Int32,
-  t : Int32,
-  it : Int32,
-) -> Bool {
-  let p3 = p[i - 4 * step].to_int()
-  let p2 = p[i - 3 * step].to_int()
-  let p1 = p[i - 2 * step].to_int()
-  let p0 = p[i - step].to_int()
-  let q0 = p[i].to_int()
-  let q1 = p[i + step].to_int()
-  let q2 = p[i + 2 * step].to_int()
-  let q3 = p[i + 3 * step].to_int()
-  if 4 * (p0 - q0).abs() + (p1 - q1).abs() > t {
-    return false
-  }
-  (p3 - p2).abs() <= it &&
-  (p2 - p1).abs() <= it &&
-  (p1 - p0).abs() <= it &&
-  (q3 - q2).abs() <= it &&
-  (q2 - q1).abs() <= it &&
-  (q1 - q0).abs() <= it
-}
-
-///|
-fn vp8_simple_filter(
-  p : FixedArray[Byte],
-  i : Int32,
-  hstride : Int32,
-  vstride : Int32,
-  thresh : Int32,
-) -> Unit {
-  let t2 = 2 * thresh + 1
-  for k in 0..<16 {
-    let o = i + k * vstride
-    if vp8_needs_filter(p, o, hstride, t2) {
-      vp8_do_filter2(p, o, hstride)
-    }
-  }
-}
-
-///|
-fn vp8_filter_loop(
-  p : FixedArray[Byte],
-  i : Int32,
-  hstride : Int32,
-  vstride : Int32,
-  size : Int32,
-  thresh : Int32,
-  ithresh : Int32,
-  hev_thresh : Int32,
-  edge : Bool,
-) -> Unit {
-  let t2 = 2 * thresh + 1
-  for k in 0..<size {
-    let o = i + k * vstride
-    if vp8_needs_filter2(p, o, hstride, t2, ithresh) {
-      if vp8_hev(p, o, hstride, hev_thresh) {
-        vp8_do_filter2(p, o, hstride)
-      } else if edge {
-        vp8_do_filter6(p, o, hstride)
-      } else {
-        vp8_do_filter4(p, o, hstride)
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Frame decoding.
-
 ///|
 fn vp8_parse_header(
   dec : VP8Decoder,
@@ -1497,52 +1321,31 @@ fn vp8_decode_frame(
         let y0 = mb_y * 16 * y_stride + mb_x * 16
         if dec.filter_type == 1 {
           if mb_x > 0 {
-            vp8_simple_filter(yp, y0, 1, y_stride, limit + 4)
+            vp8_lf_simple(yp, y0, false, y_stride, limit + 4)
           }
           if inner {
             for k in 1..<4 {
-              vp8_simple_filter(yp, y0 + 4 * k, 1, y_stride, limit)
+              vp8_lf_simple(yp, y0 + 4 * k, false, y_stride, limit)
             }
           }
           if mb_y > 0 {
-            vp8_simple_filter(yp, y0, y_stride, 1, limit + 4)
+            vp8_lf_simple(yp, y0, true, y_stride, limit + 4)
           }
           if inner {
             for k in 1..<4 {
-              vp8_simple_filter(yp, y0 + 4 * k * y_stride, y_stride, 1, limit)
+              vp8_lf_simple(yp, y0 + 4 * k * y_stride, true, y_stride, limit)
             }
           }
         } else {
           let c0 = mb_y * 8 * uv_stride + mb_x * 8
           if mb_x > 0 {
-            vp8_filter_loop(
-              yp,
-              y0,
-              1,
-              y_stride,
-              16,
-              limit + 4,
-              ilevel,
-              hev,
-              true,
-            )
-            vp8_filter_loop(
+            vp8_lf_luma(yp, y0, false, y_stride, limit + 4, ilevel, hev, true)
+            vp8_lf_chroma(
               up,
-              c0,
-              1,
-              uv_stride,
-              8,
-              limit + 4,
-              ilevel,
-              hev,
-              true,
-            )
-            vp8_filter_loop(
               vp,
               c0,
-              1,
+              false,
               uv_stride,
-              8,
               limit + 4,
               ilevel,
               hev,
@@ -1551,35 +1354,23 @@ fn vp8_decode_frame(
           }
           if inner {
             for k in 1..<4 {
-              vp8_filter_loop(
+              vp8_lf_luma(
                 yp,
                 y0 + 4 * k,
-                1,
+                false,
                 y_stride,
-                16,
                 limit,
                 ilevel,
                 hev,
                 false,
               )
             }
-            vp8_filter_loop(
+            vp8_lf_chroma(
               up,
-              c0 + 4,
-              1,
-              uv_stride,
-              8,
-              limit,
-              ilevel,
-              hev,
-              false,
-            )
-            vp8_filter_loop(
               vp,
               c0 + 4,
-              1,
+              false,
               uv_stride,
-              8,
               limit,
               ilevel,
               hev,
@@ -1587,34 +1378,13 @@ fn vp8_decode_frame(
             )
           }
           if mb_y > 0 {
-            vp8_filter_loop(
-              yp,
-              y0,
-              y_stride,
-              1,
-              16,
-              limit + 4,
-              ilevel,
-              hev,
-              true,
-            )
-            vp8_filter_loop(
+            vp8_lf_luma(yp, y0, true, y_stride, limit + 4, ilevel, hev, true)
+            vp8_lf_chroma(
               up,
-              c0,
-              uv_stride,
-              1,
-              8,
-              limit + 4,
-              ilevel,
-              hev,
-              true,
-            )
-            vp8_filter_loop(
               vp,
               c0,
+              true,
               uv_stride,
-              1,
-              8,
               limit + 4,
               ilevel,
               hev,
@@ -1623,35 +1393,23 @@ fn vp8_decode_frame(
           }
           if inner {
             for k in 1..<4 {
-              vp8_filter_loop(
+              vp8_lf_luma(
                 yp,
                 y0 + 4 * k * y_stride,
+                true,
                 y_stride,
-                1,
-                16,
                 limit,
                 ilevel,
                 hev,
                 false,
               )
             }
-            vp8_filter_loop(
+            vp8_lf_chroma(
               up,
-              c0 + 4 * uv_stride,
-              uv_stride,
-              1,
-              8,
-              limit,
-              ilevel,
-              hev,
-              false,
-            )
-            vp8_filter_loop(
               vp,
               c0 + 4 * uv_stride,
+              true,
               uv_stride,
-              1,
-              8,
               limit,
               ilevel,
               hev,
