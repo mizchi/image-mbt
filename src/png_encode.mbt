@@ -30,6 +30,33 @@ fn encode_chunk(chunk_type : FixedArray[Byte], data : Bytes) -> Bytes {
 }
 
 ///|
+/// Filter (adaptive per row) and zlib-compress the `w` x `h` RGBA8
+/// rectangle at (`x0`, `y0`) of an image `src_w` pixels wide.
+fn png_compress_rgba_rect(
+  src : Bytes,
+  src_w : Int32,
+  x0 : Int32,
+  y0 : Int32,
+  w : Int32,
+  h : Int32,
+) -> Bytes {
+  let stride = w * 4
+  let raw = FixedArray::make(h * (1 + stride), b'\x00')
+  let mut prev_row = Bytes::new(stride)
+  for y in 0..<h {
+    let raw_offset = y * (1 + stride)
+    let row_buf = FixedArray::make(stride, b'\x00')
+    row_buf.blit_from_bytes(0, src, ((y0 + y) * src_w + x0) * 4, stride)
+    let row = Bytes::from_array(row_buf)
+    let (filter_type, filtered) = select_best_filter(row, prev_row, 4)
+    raw[raw_offset] = filter_type.to_byte()
+    filtered.blit_to(raw, len=stride, dst_offset=raw_offset + 1)
+    prev_row = row
+  }
+  @zlib.zlib_compress(Bytes::from_array(raw))
+}
+
+///|
 pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
   let width = img.width
   let height = img.height
@@ -71,26 +98,7 @@ pub fn encode_png(img : ImageData) -> Bytes raise EncodeError {
     [b'\x49', b'\x48', b'\x44', b'\x52'],
     Bytes::from_array(ihdr_data),
   )
-  // Build raw scanlines with adaptive filtering
-  let stride = width * 4
-  let bpp = 4
-  let raw_len = height * (1 + stride)
-  let raw = FixedArray::make(raw_len, b'\x00')
-  let mut prev_row = Bytes::new(stride)
-  for y in 0..<height {
-    let raw_offset = y * (1 + stride)
-    let src_offset = y * stride
-    let row_buf = FixedArray::make(stride, b'\x00')
-    row_buf.blit_from_bytes(0, img.data, src_offset, stride)
-    let row = Bytes::from_array(row_buf)
-    let (filter_type, filtered) = select_best_filter(row, prev_row, bpp)
-    raw[raw_offset] = filter_type.to_byte()
-    for i in 0..<stride {
-      raw[raw_offset + 1 + i] = filtered[i]
-    }
-    prev_row = row
-  }
-  let compressed = @zlib.zlib_compress(Bytes::from_array(raw))
+  let compressed = png_compress_rgba_rect(img.data, width, 0, 0, width, height)
   let idat_chunk = encode_chunk(
     [b'\x49', b'\x44', b'\x41', b'\x54'],
     compressed,

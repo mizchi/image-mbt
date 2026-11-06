@@ -36,11 +36,15 @@ pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData ra
 
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 
+pub fn encode_apng(Animation) -> Bytes raise EncodeError
+
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
+
+pub fn encode_gif_animation(Animation) -> Bytes raise EncodeError
 
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 

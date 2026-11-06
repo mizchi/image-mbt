@@ -227,17 +227,50 @@ fn encode_gif_image_descriptor(width : Int32, height : Int32) -> Bytes {
 }
 
 ///|
+/// GIF LZW compression (variable-width codes up to 12 bits; the table is
+/// reset with a clear code when it fills up).
 fn encode_gif_lzw(indices : Array[Int32], min_code_size : Int32) -> Bytes {
   let clear = 1 << min_code_size
   let eoi = clear + 1
   let writer = GifBitWriter::new()
-  let code_size = min_code_size + 1
-
-  for index in indices {
-    writer.write_bits(clear, code_size)
-    writer.write_bits(index, code_size)
+  let mut width = min_code_size + 1
+  let mut next = eoi + 1
+  // (prefix code << 8 | byte) -> code
+  let table : Map[Int32, Int32] = Map([])
+  writer.write_bits(clear, width)
+  if indices.is_empty() {
+    writer.write_bits(eoi, width)
+    writer.flush()
+    return writer.to_bytes()
   }
-  writer.write_bits(eoi, code_size)
+  let mut prefix = indices[0]
+  for i in 1..<indices.length() {
+    let b = indices[i]
+    let key = (prefix << 8) | b
+    match table.get(key) {
+      Some(code) => prefix = code
+      None => {
+        writer.write_bits(prefix, width)
+        if next < 4096 {
+          table.set(key, next)
+          next += 1
+          // The decoder adds each entry one code later, so it widens at
+          // next == 2^width; we widen one entry after that.
+          if next > 1 << width && width < 12 {
+            width += 1
+          }
+        } else {
+          writer.write_bits(clear, width)
+          table.clear()
+          next = eoi + 1
+          width = min_code_size + 1
+        }
+        prefix = b
+      }
+    }
+  }
+  writer.write_bits(prefix, width)
+  writer.write_bits(eoi, width)
   writer.flush()
   writer.to_bytes()
 }
