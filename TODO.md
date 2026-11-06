@@ -9,7 +9,7 @@
 - [x] GIF decode (animated, frame compositing) / encode (single frame)
 - [x] BMP decode (palette, RLE, 16/24/32-bit, bit fields) / encode
 - [x] ICO / CUR decode, ICO encode
-- [x] TIFF decode (strips / tiles, LZW / Deflate / PackBits)
+- [x] TIFF decode (all pages, strips / tiles, LZW / Deflate / PackBits / JPEG) / encode
 - [x] WebP lossless encode (predictor / palette / subtract-green, LZ77, color cache)
 - [x] AVIF encode (js-target MVP, opaque images)
 - [x] Resize (Nearest / fixed-point Bilinear / Bicubic)
@@ -26,7 +26,6 @@
 ## Next
 
 - [ ] WebP lossy encode
-- [ ] TIFF: more pages, JPEG-in-TIFF; TIFF encode
 - [ ] WebP lossless encoder: cross-color transform, meta prefix codes, faster search
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)

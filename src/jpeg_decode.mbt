@@ -645,7 +645,12 @@ fn JpegState::finish_progressive(
 }
 
 ///|
-pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
+/// Decode the entropy-coded data of a JPEG into full-resolution component
+/// planes (before color conversion) and the color space libjpeg-turbo
+/// would infer. Returns (width, height, planes, space).
+fn jpeg_decode_planes(
+  data : Bytes,
+) -> (Int32, Int32, Array[FixedArray[Int32]], JpegColorSpace) raise DecodeError {
   if data.length() < 2 || data[0].to_int() != 0xFF || data[1].to_int() != 0xD8 {
     raise InvalidSignature("not a JPEG file")
   }
@@ -916,7 +921,6 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       height,
     )
   })
-  let out_buf = FixedArray::make(width * height * 4, b'\xFF')
   // Color space as libjpeg-turbo infers it from the markers / component IDs.
   let space = if ncomp == 1 {
     JpegGray
@@ -937,6 +941,13 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       Some(_) => JpegYcck
     }
   }
+  (width, height, planes, space)
+}
+
+///|
+pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
+  let (width, height, planes, space) = jpeg_decode_planes(data)
+  let out_buf = FixedArray::make(width * height * 4, b'\xFF')
   let t = jpeg_ycc_tables
   if space is (JpegCmyk | JpegYcck) {
     // libjpeg yields Adobe-style inverted CMYK (YCCK converts its first

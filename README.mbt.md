@@ -1,6 +1,6 @@
 # mizchi/image
 
-Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, encode PNG / APNG / JPEG / GIF / BMP / WebP (still and animated) / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
+Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, encode PNG / APNG / JPEG / GIF / BMP / TIFF / WebP (still and animated) / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
 
@@ -65,7 +65,7 @@ inspect((info.format, info.width, info.height))
 | GIF | yes | yes | decode / encode | yes |
 | BMP | yes | yes (32-bit) | n/a | yes (streamed) |
 | ICO / CUR | yes | yes (ICO, PNG payload) | n/a | yes |
-| TIFF | yes (first image) | no | n/a | yes |
+| TIFF | yes (all pages) | yes (RGB / RGBA) | n/a | yes |
 | WebP | yes (lossy / lossless / alpha) | yes (lossless) | decode / encode | yes |
 | AVIF | no | yes (`js` only) | no | no |
 
@@ -78,7 +78,7 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 - **GIF** decode: GIF87a / 89a, global and local color tables, interlace, transparency, animation with disposal 1-3, delays and the NETSCAPE loop count (frames are composited onto a transparent canvas, like browsers). Encode: LZW-compressed; `encode_gif` for one image and `encode_gif_animation` for an `Animation` (global or local palettes, changed-region cropping). At most 256 colors per frame, alpha 0 or 255.
 - **BMP** decode: 1 / 2 / 4 / 8-bit palette, RLE4 / RLE8, 16 / 24 / 32-bit, `BI_BITFIELDS` / `BI_ALPHABITFIELDS`, V2-V5 and OS/2 headers. Encode: 32-bit BGRA.
 - **ICO / CUR** decode: PNG or BMP (DIB) payloads with the AND mask; `decode_ico` returns the largest image, `decode_ico_all` every image. Encode: one image up to 256x256 with a PNG payload.
-- **TIFF** decode (first image): little / big endian, strips and tiles, chunky and planar samples, None / LZW / Deflate / PackBits with the horizontal predictor, WhiteIsZero / BlackIsZero / RGB / palette / CMYK, 1-16 bits per sample, extra alpha (associated alpha is un-premultiplied).
+- **TIFF** decode (`decode_tiff` for the first image, `decode_tiff_pages` for every page): little / big endian, strips and tiles, chunky and planar samples, None / LZW / Deflate / PackBits with the horizontal predictor, JPEG (compression 7, with `JPEGTables`; raw components like libtiff, YCbCr converted to RGB), WhiteIsZero / BlackIsZero / RGB / palette / CMYK, 1-16 bits per sample, extra alpha (associated alpha is un-premultiplied).
 - **WebP** decode: lossy (VP8), lossless (VP8L, all transforms, color cache, meta prefix codes), alpha (`ALPH`, raw or lossless, with spatial filters), and animation (`decode_webp_frames`: `ANMF` frames composited like libwebp's `WebPAnimDecoder`, with blending, disposal and the loop count). Output is identical to libwebp (RGBA, fancy upsampling). Encode: lossless (VP8L) with length-limited Huffman codes, LZ77, color cache and the subtract-green / predictor / palette transforms (the smallest of several configurations is kept; typically within 5-30% of libwebp's size); `encode_webp_animation` writes an animated WebP from an `Animation` (lossless frames cropped to the changed region, no blending).
 - **AVIF** encode: `js` target MVP for opaque images; needs browser AVIF canvas support or a local `ffmpeg`.
 - **Resize**: Nearest, and fixed-point separable Bilinear / Bicubic.
@@ -87,7 +87,7 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 ### Not supported
 
 - JPEG: arithmetic coding, lossless and hierarchical modes, 12-bit samples. Decoders return stored pixels; use `decode_image_upright` / `apply_orientation` for EXIF orientation.
-- TIFF: JPEG / CCITT and other compressions, BigTIFF, floating-point samples, pages after the first.
+- TIFF: old-style JPEG (compression 6), CCITT and other compressions, BigTIFF, floating-point samples, uncompressed YCbCr.
 - AVIF decode; lossy WebP encode.
 - Color management (ICC profiles, gamma) is not applied.
 
@@ -137,6 +137,8 @@ pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
 // TIFF
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
+pub fn decode_tiff_pages(Bytes) -> Array[ImageData] raise DecodeError
+pub fn encode_tiff(ImageData, compression? : TiffCompression = Lzw) -> Bytes raise EncodeError
 
 // WebP / AVIF
 pub fn decode_webp(Bytes) -> ImageData raise DecodeError
@@ -160,6 +162,7 @@ pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
 pub(all) enum JpegSubsampling { Yuv444; Yuv422; Yuv420 }
 pub(all) enum PngColorMode { Rgba; Rgb; Gray; GrayAlpha; Palette; Auto }
 pub(all) enum PngCompression { Stored; Fast; Default; Best }
+pub(all) enum TiffCompression { NoCompression; Lzw; Deflate; PackBits }
 pub(all) struct Animation { width : Int; height : Int; frames : Array[AnimationFrame]; plays : Int } // plays: 0 = forever
 pub(all) struct AnimationFrame { image : ImageData; delay_ms : Int }
 pub(all) enum ImageFormat { Png; Bmp; Jpeg; Gif; Ico; Tiff; WebP }
