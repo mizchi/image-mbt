@@ -45,6 +45,7 @@ pub(all) enum ImageFormat {
   Gif
   Ico
   Tiff
+  WebP
 }
 
 ///|
@@ -118,6 +119,7 @@ pub impl Show for ImageFormat with fn output(self, logger) {
     Gif => logger.write_string("Gif")
     Ico => logger.write_string("Ico")
     Tiff => logger.write_string("Tiff")
+    WebP => logger.write_string("WebP")
   }
 }
 

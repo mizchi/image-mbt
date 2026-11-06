@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0
+
+- WebP decode: `decode_webp` and `decode_webp_frames` (lossy VP8,
+  lossless VP8L, `ALPH` alpha, animation). Output is identical to libwebp
+- `ImageFormat` gains `WebP` (breaking for exhaustive matches);
+  `decode_image`, `detect_image_format`, `decode_image_stream` and
+  `read_exif_orientation` (`EXIF` chunk) accept WebP
+
 ## 0.12.0
 
 Breaking changes:

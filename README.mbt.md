@@ -1,6 +1,6 @@
 # mizchi/image
 
-Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF, encode PNG / APNG / JPEG / GIF / BMP / WebP / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
+Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, encode PNG / APNG / JPEG / GIF / BMP / WebP / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
 
@@ -13,7 +13,7 @@ moon add mizchi/image
 ## Usage
 
 ```moonbit
-// Auto-detect PNG / JPEG / GIF / BMP / ICO / TIFF
+// Auto-detect PNG / JPEG / GIF / BMP / ICO / TIFF / WebP
 let img = @image.decode_image(image_bytes)
 
 // Photos: apply the EXIF orientation so they display upright
@@ -66,7 +66,7 @@ inspect((info.format, info.width, info.height))
 | BMP | yes | yes (32-bit) | n/a | yes (streamed) |
 | ICO / CUR | yes | yes (ICO, PNG payload) | n/a | yes |
 | TIFF | yes (first image) | no | n/a | yes |
-| WebP | no | yes (lossless) | no | no |
+| WebP | yes (lossy / lossless / alpha) | yes (lossless) | decode | yes |
 | AVIF | no | yes (`js` only) | no | no |
 
 All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`. `decode_image_stream` reads rows as they are decoded for PNG and BMP; other formats are decoded first, then emitted row by row.
@@ -79,16 +79,16 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 - **BMP** decode: 1 / 2 / 4 / 8-bit palette, RLE4 / RLE8, 16 / 24 / 32-bit, `BI_BITFIELDS` / `BI_ALPHABITFIELDS`, V2-V5 and OS/2 headers. Encode: 32-bit BGRA.
 - **ICO / CUR** decode: PNG or BMP (DIB) payloads with the AND mask; `decode_ico` returns the largest image, `decode_ico_all` every image. Encode: one image up to 256x256 with a PNG payload.
 - **TIFF** decode (first image): little / big endian, strips and tiles, chunky and planar samples, None / LZW / Deflate / PackBits with the horizontal predictor, WhiteIsZero / BlackIsZero / RGB / palette / CMYK, 1-16 bits per sample, extra alpha (associated alpha is un-premultiplied).
-- **WebP** encode: lossless (VP8L) still images.
+- **WebP** decode: lossy (VP8), lossless (VP8L, all transforms, color cache, meta prefix codes), alpha (`ALPH`, raw or lossless, with spatial filters), and animation (`decode_webp_frames`: `ANMF` frames composited like libwebp's `WebPAnimDecoder`, with blending, disposal and the loop count). Output is identical to libwebp (RGBA, fancy upsampling). Encode: lossless (VP8L) still images.
 - **AVIF** encode: `js` target MVP for opaque images; needs browser AVIF canvas support or a local `ffmpeg`.
 - **Resize**: Nearest, and fixed-point separable Bilinear / Bicubic.
-- **EXIF orientation**: `read_exif_orientation` reads the tag from JPEG, PNG (`eXIf`) and TIFF; `apply_orientation` applies it with the same mapping as Pillow's `exif_transpose`; `decode_image_upright` does both.
+- **EXIF orientation**: `read_exif_orientation` reads the tag from JPEG, PNG (`eXIf`), TIFF and WebP (`EXIF`); `apply_orientation` applies it with the same mapping as Pillow's `exif_transpose`; `decode_image_upright` does both.
 
 ### Not supported
 
 - JPEG: arithmetic coding, lossless and hierarchical modes, 12-bit samples, CMYK / Adobe 4-component files. Decoders return stored pixels; use `decode_image_upright` / `apply_orientation` for EXIF orientation.
 - TIFF: JPEG / CCITT and other compressions, BigTIFF, floating-point samples, pages after the first.
-- WebP and AVIF decode.
+- AVIF decode; lossy WebP encode.
 - Color management (ICC profiles, gamma) is not applied.
 
 Unsupported inputs raise `DecodeError::UnsupportedFeature`.
@@ -97,7 +97,7 @@ Unsupported inputs raise `DecodeError::UnsupportedFeature`.
 
 - Decoders raise `DecodeError` on malformed input instead of panicking. This is covered by a mutation fuzz test over every format.
 - Images larger than 2^27 pixels (134M) are rejected with `UnsupportedFeature("image too large")`, and PNG / TIFF zlib data is never inflated beyond the size the header implies.
-- Decoders are tested against Pillow (libjpeg-turbo, libtiff, libpng) fixtures. JPEG decode and encode are checked for exact equality with libjpeg.
+- Decoders are tested against Pillow (libjpeg-turbo, libtiff, libpng, libwebp) fixtures. JPEG decode and encode, and WebP decode, are checked for exact equality with libjpeg / libwebp.
 - On the `wasm` (linear memory) target, hot loops use 128-bit SIMD through inline WAT: PNG filters and color expansion, JPEG IDCT / FDCT, and resize. Other targets run scalar code that gives identical output. A wasm runtime with SIMD support is required.
 
 ## API
@@ -139,6 +139,8 @@ pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 
 // WebP / AVIF
+pub fn decode_webp(Bytes) -> ImageData raise DecodeError
+pub fn decode_webp_frames(Bytes) -> Animation raise DecodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
@@ -159,7 +161,7 @@ pub(all) enum PngColorMode { Rgba; Rgb; Gray; GrayAlpha; Palette; Auto }
 pub(all) enum PngCompression { Stored; Fast; Default; Best }
 pub(all) struct Animation { width : Int; height : Int; frames : Array[AnimationFrame]; plays : Int } // plays: 0 = forever
 pub(all) struct AnimationFrame { image : ImageData; delay_ms : Int }
-pub(all) enum ImageFormat { Png; Bmp; Jpeg; Gif; Ico; Tiff }
+pub(all) enum ImageFormat { Png; Bmp; Jpeg; Gif; Ico; Tiff; WebP }
 pub(all) suberror DecodeError { InvalidSignature(String); InvalidChunkCrc(String); MissingChunk(String); UnsupportedFeature(String); CorruptData(String) }
 pub(all) suberror EncodeError { InvalidDimensions(String); InvalidData(String) }
 ```

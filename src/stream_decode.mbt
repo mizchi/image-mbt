@@ -31,6 +31,8 @@ pub fn detect_image_format(raw : Bytes) -> ImageFormat? {
     Some(Ico)
   } else if tiff_signature_ok(raw) {
     Some(Tiff)
+  } else if webp_signature_ok(raw) {
+    Some(WebP)
   } else {
     None
   }
@@ -86,8 +88,8 @@ fn is_ico_signature(raw : Bytes) -> Bool {
 }
 
 ///|
-/// Decode a PNG, JPEG, GIF (first frame), BMP, ICO/CUR or TIFF (first page)
-/// image, detected from its signature.
+/// Decode a PNG, JPEG, GIF (first frame), BMP, ICO/CUR, TIFF (first page)
+/// or WebP (first frame) image, detected from its signature.
 pub fn decode_image(raw : Bytes) -> ImageData raise DecodeError {
   if is_png_signature(raw) {
     decode_png(raw)
@@ -101,6 +103,8 @@ pub fn decode_image(raw : Bytes) -> ImageData raise DecodeError {
     decode_ico(raw)
   } else if tiff_signature_ok(raw) {
     decode_tiff(raw)
+  } else if webp_signature_ok(raw) {
+    decode_webp(raw)
   } else {
     raise InvalidSignature("unknown image format")
   }
