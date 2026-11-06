@@ -2,37 +2,37 @@
 
 ## Done
 
-- [x] PNG decoder (IHDR/PLTE/tRNS/IDAT/IEND, all color types and bit depths)
-- [x] PNG encoder (RGBA8, adaptive row filtering)
-- [x] zlib/deflate integration (`mizchi/zlib`)
-- [x] Color type conversion to RGBA8
-- [x] Error model and diagnostics (`DecodeError` / `EncodeError`)
-- [x] Engine-ready `ImageData` contract
-- [x] Golden tests with fixture corpus
-- [x] JPEG baseline / extended sequential decode (restart markers)
+- [x] PNG decode (all color types and bit depths, tRNS, Adam7) / encode (RGBA8)
+- [x] APNG decode (frame compositing)
+- [x] JPEG decode (baseline / extended / progressive, restart markers; libjpeg-exact)
+- [x] JPEG encode (4:4:4 / 4:2:2 / 4:2:0; libjpeg-exact entropy data)
+- [x] GIF decode (animated, frame compositing) / encode (single frame)
 - [x] BMP decode (palette, RLE, 16/24/32-bit, bit fields) / encode
-- [x] Image resize (Nearest / Bilinear / Bicubic)
-- [x] GIF encoder (single-frame)
-- [x] ICO encoder (single-image, PNG payload)
-- [x] AVIF encoder (js-target MVP, opaque images)
+- [x] ICO / CUR decode, ICO encode
+- [x] TIFF decode (strips / tiles, LZW / Deflate / PackBits)
+- [x] WebP lossless encode
+- [x] AVIF encode (js-target MVP, opaque images)
+- [x] Resize (Nearest / fixed-point Bilinear / Bicubic)
+- [x] Format auto-detect (`decode_image`), stream decode (PNG / BMP)
+- [x] Mutation fuzz test; malformed input raises `DecodeError`
+- [x] wasm SIMD fast paths
 
 ## Next
 
-- [x] PNG interlaced (Adam7) decode
-- [x] ICO decode + format auto-detect (`decode_image`)
-- [x] JPEG progressive decode
-- [x] GIF decode (animated, with frame compositing)
-
-
-- [x] JPEG encoder
-- [ ] WebP decode
-- [ ] WebP encoder optimization (transforms/LZ77/color cache)
+- [ ] EXIF orientation (read + apply)
+- [ ] WebP decode (lossless VP8L, then lossy VP8)
+- [ ] Animated GIF / APNG encode
+- [ ] PNG encode for RGB / gray / palette, compression level option
+- [ ] TIFF: more pages, JPEG-in-TIFF; TIFF encode
+- [ ] JPEG: CMYK / Adobe files, optimized Huffman tables on encode
+- [ ] WebP encoder optimization (transforms / LZ77 / color cache)
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
-- [ ] Zero-copy decode path for js/wasm where possible
-- [ ] Streaming decode API for large assets
-- [ ] Metadata handling policy (gamma/sRGB/ICC)
+- [ ] Metadata handling policy (gamma / sRGB / ICC)
+- [ ] zlib output-size limit against decompression bombs (in `mizchi/zlib`)
 
 ## Packaging
 
+- [ ] Unify `GifAnimation` with `Animation`
+- [ ] Add JPEG / GIF / ICO / TIFF to `ImageFormat` (breaking change)
 - [ ] Split reusable codec core from engine-specific adapters
 - [ ] Stabilize public API and add compatibility tests
