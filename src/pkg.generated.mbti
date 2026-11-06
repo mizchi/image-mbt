@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn apply_orientation(ImageData, Int32) -> ImageData
+
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int32) raise DecodeError
@@ -21,6 +23,8 @@ pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
 pub fn decode_image(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_image_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
+
+pub fn decode_image_upright(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
@@ -47,6 +51,8 @@ pub fn encode_png(ImageData) -> Bytes raise EncodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 
 pub fn package_name() -> String
+
+pub fn read_exif_orientation(Bytes) -> Int32?
 
 pub fn resize(ImageData, Int32, Int32, ResizeMethod) -> ImageData raise EncodeError
 
