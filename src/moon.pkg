@@ -12,6 +12,8 @@ options(
     "avif_encode_test.mbt": [ "js" ],
     "jpeg_dct_scalar.mbt": [ "not", "wasm" ],
     "jpeg_dct_simd.mbt": [ "wasm" ],
+    "jpeg_idct_scalar.mbt": [ "not", "wasm" ],
+    "jpeg_idct_simd.mbt": [ "wasm" ],
     "png_color_scalar.mbt": [ "not", "wasm" ],
     "png_color_simd.mbt": [ "wasm" ],
     "png_filter_scalar.mbt": [ "not", "wasm" ],
