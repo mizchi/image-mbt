@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0
+
+- APNG decode: `decode_png_frames` returns an `Animation` (composited RGBA
+  frames with delays, and the play count) using acTL / fcTL / fdAT, frame
+  disposal (none / background / previous) and blending (source / over).
+  `decode_png` keeps returning the default image
+- TIFF decode: `decode_tiff` (first image). Little / big endian, strips and
+  tiles, chunky and planar samples, None / LZW / Deflate / PackBits with
+  horizontal predictor, WhiteIsZero / BlackIsZero / RGB / palette / CMYK,
+  1-16 bits per sample, extra alpha (associated alpha un-premultiplied).
+  JPEG / CCITT compression and BigTIFF raise `UnsupportedFeature`
+- `decode_image` also detects TIFF
+- New generic `Animation` / `AnimationFrame` types
+
 ## 0.9.0
 
 - `encode_jpeg` follows libjpeg's compression pipeline: fixed-point

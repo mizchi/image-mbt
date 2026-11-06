@@ -106,6 +106,12 @@ fn fuzz_decode_all(data : Bytes) -> Unit {
   sink(decode_ico_all(data).length()) catch {
     _ => ()
   }
+  sink(decode_tiff(data).width) catch {
+    _ => ()
+  }
+  sink(decode_png_frames(data).frames.length()) catch {
+    _ => ()
+  }
   sink(decode_image(data).width) catch {
     _ => ()
   }
