@@ -50,7 +50,7 @@ pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_jpeg(ImageData, quality? : Int32, subsampling? : JpegSubsampling) -> Bytes raise EncodeError
 
-pub fn encode_png(ImageData) -> Bytes raise EncodeError
+pub fn encode_png(ImageData, color? : PngColorMode, compression? : PngCompression) -> Bytes raise EncodeError
 
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 
@@ -158,6 +158,22 @@ pub(all) enum JpegSubsampling {
   Yuv444
   Yuv422
   Yuv420
+}
+
+pub(all) enum PngColorMode {
+  Rgba
+  Rgb
+  Gray
+  GrayAlpha
+  Palette
+  Auto
+}
+
+pub(all) enum PngCompression {
+  Stored
+  Fast
+  Default
+  Best
 }
 
 #derive(Eq)
