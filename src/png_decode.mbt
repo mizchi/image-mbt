@@ -136,6 +136,37 @@ fn collect_png_image_data(
 }
 
 ///|
+/// Exact size of the decompressed image data for `ihdr` (filter bytes
+/// included), for normal and Adam7-interlaced images.
+fn png_expected_data_len(ihdr : IhdrData) -> Int32 {
+  let w = ihdr.width
+  let h = ihdr.height
+  let len = fn(pw : Int32, ph : Int32) -> Int64 {
+    if pw <= 0 || ph <= 0 {
+      0L
+    } else {
+      ph.to_int64() *
+      (1 + png_row_bytes(pw, ihdr.color_type, ihdr.bit_depth)).to_int64()
+    }
+  }
+  let total = if ihdr.interlace == 1 {
+    let mut t = 0L
+    for p in adam7_passes {
+      let (x0, y0, dx, dy) = p
+      t += len((w - x0 + dx - 1) / dx, (h - y0 + dy - 1) / dy)
+    }
+    t
+  } else {
+    len(w, h)
+  }
+  if total > 0x7FFFFFFFL {
+    0x7FFFFFFF
+  } else {
+    total.to_int()
+  }
+}
+
+///|
 fn decode_png_scanlines(
   ihdr : IhdrData,
   idat_parts : Array[Bytes],
@@ -152,9 +183,13 @@ fn decode_png_scanlines(
     offset += part.length()
   }
   let compressed = Bytes::from_array(idat_buf)
-  // Decompress
-  let decompressed = @zlib.zlib_decompress(compressed) catch {
-    _ => raise CorruptData("zlib decompression failed")
+  // Decompress, never beyond the size the header implies (guards against
+  // decompression bombs; the exact size is checked below).
+  let decompressed = @zlib.zlib_decompress(
+    compressed,
+    max_size=png_expected_data_len(ihdr),
+  ) catch {
+    _ => raise CorruptData("zlib decompression failed or exceeds image size")
   }
   if ihdr.interlace == 1 {
     decode_png_adam7(ihdr, decompressed, palette, trns, on_row)

@@ -2,26 +2,6 @@
 // interlaced frames, transparency, and animation with frame disposal.
 
 ///|
-/// One fully composited animation frame.
-pub(all) struct GifFrame {
-  /// The whole logical screen after drawing this frame (RGBA8).
-  image : ImageData
-  /// Display time in milliseconds (Graphics Control Extension delay * 10).
-  delay_ms : Int32
-}
-
-///|
-/// A decoded GIF animation.
-pub(all) struct GifAnimation {
-  width : Int32
-  height : Int32
-  frames : Array[GifFrame]
-  /// NETSCAPE2.0 loop count: 0 = loop forever, n = repeat n times,
-  /// None = no looping extension (play once).
-  loop_count : Int32?
-}
-
-///|
 priv struct GifReader {
   data : Bytes
   mut pos : Int32
@@ -208,7 +188,7 @@ fn gif_signature_ok(data : Bytes) -> Bool {
 fn decode_gif_impl(
   data : Bytes,
   max_frames : Int32,
-) -> GifAnimation raise DecodeError {
+) -> Animation raise DecodeError {
   if !gif_signature_ok(data) {
     raise InvalidSignature("not a GIF file")
   }
@@ -225,7 +205,7 @@ fn decode_gif_impl(
     None
   }
   let canvas = FixedArray::make(width * height * 4, b'\x00')
-  let frames : Array[GifFrame] = []
+  let frames : Array[AnimationFrame] = []
   let mut loop_count : Int32? = None
   // Pending Graphics Control Extension for the next image.
   let mut delay = 0
@@ -349,7 +329,14 @@ fn decode_gif_impl(
   if frames.is_empty() {
     raise MissingChunk("GIF image data")
   }
-  { width, height, frames, loop_count, }
+  // NETSCAPE loop count n repeats n more times (0 = forever); without the
+  // extension the animation plays once.
+  let plays = match loop_count {
+    None => 1
+    Some(0) => 0
+    Some(n) => n + 1
+  }
+  { width, height, frames, plays, }
 }
 
 ///|
@@ -380,6 +367,6 @@ pub fn decode_gif(data : Bytes) -> ImageData raise DecodeError {
 ///|
 /// Decode every frame of a (possibly animated) GIF. Each frame is the full
 /// logical screen after compositing, with its delay.
-pub fn decode_gif_frames(data : Bytes) -> GifAnimation raise DecodeError {
+pub fn decode_gif_frames(data : Bytes) -> Animation raise DecodeError {
   decode_gif_impl(data, 0x7FFFFFFF)
 }

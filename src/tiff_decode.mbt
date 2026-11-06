@@ -410,8 +410,9 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
         1 => src
         5 => tiff_lzw_decode(src, expected)
         8 | 32946 =>
-          @zlib.zlib_decompress(src) catch {
-            _ => raise CorruptData("TIFF deflate data is corrupt")
+          // Bounded by the chunk size (decompression bombs).
+          @zlib.zlib_decompress(src, max_size=expected) catch {
+            _ => raise CorruptData("TIFF deflate data is corrupt or too large")
           }
         _ => tiff_packbits_decode(src, expected)
       }

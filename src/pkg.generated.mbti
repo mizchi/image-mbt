@@ -6,13 +6,15 @@ import {
 }
 
 // Values
+pub fn apply_orientation(ImageData, Int32) -> ImageData
+
 pub fn decode_bmp(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int32) raise DecodeError
 
 pub fn decode_gif(Bytes) -> ImageData raise DecodeError
 
-pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
+pub fn decode_gif_frames(Bytes) -> Animation raise DecodeError
 
 pub fn decode_ico(Bytes) -> ImageData raise DecodeError
 
@@ -21,6 +23,8 @@ pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
 pub fn decode_image(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_image_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
+
+pub fn decode_image_upright(Bytes) -> ImageData raise DecodeError
 
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
 
@@ -32,21 +36,29 @@ pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData ra
 
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 
+pub fn detect_image_format(Bytes) -> ImageFormat?
+
+pub fn encode_apng(Animation) -> Bytes raise EncodeError
+
 pub fn encode_avif(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_bmp(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 
+pub fn encode_gif_animation(Animation) -> Bytes raise EncodeError
+
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_jpeg(ImageData, quality? : Int32, subsampling? : JpegSubsampling) -> Bytes raise EncodeError
 
-pub fn encode_png(ImageData) -> Bytes raise EncodeError
+pub fn encode_png(ImageData, color? : PngColorMode, compression? : PngCompression) -> Bytes raise EncodeError
 
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 
 pub fn package_name() -> String
+
+pub fn read_exif_orientation(Bytes) -> Int32?
 
 pub fn resize(ImageData, Int32, Int32, ResizeMethod) -> ImageData raise EncodeError
 
@@ -96,18 +108,6 @@ pub fn ColorType::output(Self, &Logger) -> Unit
 pub fn ColorType::to_string(Self) -> String
 pub impl Show for ColorType
 
-pub(all) struct GifAnimation {
-  width : Int32
-  height : Int32
-  frames : Array[GifFrame]
-  loop_count : Int32?
-}
-
-pub(all) struct GifFrame {
-  image : ImageData
-  delay_ms : Int32
-}
-
 #derive(Eq)
 pub(all) struct IhdrData {
   width : Int32
@@ -138,6 +138,10 @@ pub impl Show for ImageData
 pub(all) enum ImageFormat {
   Png
   Bmp
+  Jpeg
+  Gif
+  Ico
+  Tiff
 }
 pub fn ImageFormat::equal(Self, Self) -> Bool
 pub fn ImageFormat::output(Self, &Logger) -> Unit
@@ -148,6 +152,22 @@ pub(all) enum JpegSubsampling {
   Yuv444
   Yuv422
   Yuv420
+}
+
+pub(all) enum PngColorMode {
+  Rgba
+  Rgb
+  Gray
+  GrayAlpha
+  Palette
+  Auto
+}
+
+pub(all) enum PngCompression {
+  Stored
+  Fast
+  Default
+  Best
 }
 
 #derive(Eq)

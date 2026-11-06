@@ -150,3 +150,12 @@ test "robustness: ICO directory offset + size overflow" {
     _ => fail("expected CorruptData(out of bounds)")
   }
 }
+
+///|
+test "robustness: PNG decompression bomb is rejected before inflating" {
+  // A 1x1 RGBA image whose IDAT inflates to 1 MiB of zeros.
+  let bomb = @zlib.zlib_compress(Bytes::make(1 << 20, b'\x00'))
+  let png = robustness_png(b"\x00\x00\x00\x01", b"\x00\x00\x00\x01", bomb)
+  let r = Ok(@image.decode_png(png)) catch { e => Err(e) }
+  assert_true(r is Err(@image.CorruptData(_)))
+}

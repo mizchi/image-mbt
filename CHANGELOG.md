@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.12.0
+
+Breaking changes:
+
+- `decode_gif_frames` returns `Animation` (like `decode_png_frames`);
+  `GifAnimation` / `GifFrame` are removed. `loop_count` becomes `plays`:
+  no NETSCAPE loop extension = 1, loop 0 = 0 (forever), loop n = n + 1
+- `ImageFormat` gains `Jpeg`, `Gif`, `Ico` and `Tiff`
+
+Other changes:
+
+- New `detect_image_format`
+- `decode_image_stream` accepts every format (PNG and BMP are streamed,
+  others are decoded and then emitted row by row)
+
+## 0.11.0
+
+- EXIF orientation: `read_exif_orientation` (JPEG / PNG / TIFF),
+  `apply_orientation` (same mapping as Pillow's `exif_transpose`) and
+  `decode_image_upright`
+- Animation encoders: `encode_apng` and `encode_gif_animation` (from an
+  `Animation`; changed-region cropping, global / local GIF palettes)
+- `encode_gif` now uses real LZW compression (it previously emitted a clear
+  code before every pixel)
+- `encode_png` options: `color~ : PngColorMode` (Rgba default, Rgb, Gray,
+  GrayAlpha, Palette at 1-8 bits, Auto) and `compression~ : PngCompression`
+  (Stored, Fast, Default, Best)
+- Decompression bombs: PNG IDAT and TIFF Deflate inflation are capped at
+  the size the header implies
+- CI: timeouts for the ffmpeg install step and the job
+
 ## 0.10.0
 
 - APNG decode: `decode_png_frames` returns an `Animation` (composited RGBA

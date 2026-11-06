@@ -18,7 +18,7 @@ test "gif: static 16 colors" {
   assert_eq(anim.width, 23)
   assert_eq(anim.height, 17)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 0)
   assert_eq(
     anim.frames[0].image.data,
@@ -34,7 +34,7 @@ test "gif: static interlaced" {
   assert_eq(anim.width, 23)
   assert_eq(anim.height, 17)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 0)
   assert_eq(
     anim.frames[0].image.data,
@@ -53,7 +53,7 @@ test "gif: static 256 colors 72x60 (12-bit codes, clears)" {
   assert_eq(anim.width, 72)
   assert_eq(anim.height, 60)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 0)
   assert_eq(
     anim.frames[0].image.data,
@@ -75,7 +75,7 @@ test "gif: solid 40x40 (LZW KwKwK codes)" {
   assert_eq(anim.width, 40)
   assert_eq(anim.height, 40)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 0)
   assert_eq(
     anim.frames[0].image.data,
@@ -94,7 +94,7 @@ test "gif: static with transparency" {
   assert_eq(anim.width, 19)
   assert_eq(anim.height, 13)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 0)
   assert_eq(
     anim.frames[0].image.data,
@@ -110,7 +110,7 @@ test "gif: animation disposal 1, durations, loop 0" {
   assert_eq(anim.width, 20)
   assert_eq(anim.height, 14)
   assert_eq(anim.frames.length(), 4)
-  assert_eq(anim.loop_count, Some(0))
+  assert_eq(anim.plays, 0)
   assert_eq(anim.frames[0].delay_ms, 100)
   assert_eq(
     anim.frames[0].image.data,
@@ -141,7 +141,7 @@ test "gif: animation disposal 2 with transparency" {
   assert_eq(anim.width, 20)
   assert_eq(anim.height, 14)
   assert_eq(anim.frames.length(), 4)
-  assert_eq(anim.loop_count, Some(3))
+  assert_eq(anim.plays, 4)
   assert_eq(anim.frames[0].delay_ms, 80)
   assert_eq(
     anim.frames[0].image.data,
@@ -172,7 +172,7 @@ test "gif: animation disposal 3" {
   assert_eq(anim.width, 20)
   assert_eq(anim.height, 14)
   assert_eq(anim.frames.length(), 4)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
   assert_eq(anim.frames[0].delay_ms, 40)
   assert_eq(
     anim.frames[0].image.data,
@@ -203,7 +203,7 @@ test "gif: animation with local color tables" {
   assert_eq(anim.width, 16)
   assert_eq(anim.height, 12)
   assert_eq(anim.frames.length(), 3)
-  assert_eq(anim.loop_count, Some(0))
+  assert_eq(anim.plays, 0)
   assert_eq(anim.frames[0].delay_ms, 120)
   assert_eq(
     anim.frames[0].image.data,

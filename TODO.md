@@ -16,23 +16,23 @@
 - [x] Format auto-detect (`decode_image`), stream decode (PNG / BMP)
 - [x] Mutation fuzz test; malformed input raises `DecodeError`
 - [x] wasm SIMD fast paths
+- [x] EXIF orientation (read + apply)
+- [x] Animated GIF / APNG encode; real GIF LZW
+- [x] PNG encode color modes and compression levels
+- [x] zlib output-size limits on decode
 
 ## Next
 
-- [ ] EXIF orientation (read + apply)
 - [ ] WebP decode (lossless VP8L, then lossy VP8)
-- [ ] Animated GIF / APNG encode
-- [ ] PNG encode for RGB / gray / palette, compression level option
 - [ ] TIFF: more pages, JPEG-in-TIFF; TIFF encode
 - [ ] JPEG: CMYK / Adobe files, optimized Huffman tables on encode
 - [ ] WebP encoder optimization (transforms / LZ77 / color cache)
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)
-- [ ] zlib output-size limit against decompression bombs (in `mizchi/zlib`)
 
 ## Packaging
 
-- [ ] Unify `GifAnimation` with `Animation`
-- [ ] Add JPEG / GIF / ICO / TIFF to `ImageFormat` (breaking change)
+- [x] Unify `GifAnimation` with `Animation`
+- [x] Add JPEG / GIF / ICO / TIFF to `ImageFormat`
 - [ ] Split reusable codec core from engine-specific adapters
 - [ ] Stabilize public API and add compatibility tests
