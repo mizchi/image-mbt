@@ -656,6 +656,8 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
   let mut state : JpegState? = None
   let mut scans = 0
   let mut restart_interval = 0
+  let mut saw_jfif = false
+  let mut adobe_transform : Int32? = None
   // Parse markers; each SOS is decoded as soon as it is seen.
   while pos + 1 < data.length() {
     if data[pos].to_int() != 0xFF {
@@ -733,7 +735,7 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       let height = seg_u16(pos + 3)
       let width = seg_u16(pos + 5)
       let ncomp = seg_byte(pos + 7)
-      if ncomp != 3 && ncomp != 1 {
+      if ncomp != 1 && ncomp != 3 && ncomp != 4 {
         raise UnsupportedFeature(
           "unsupported component count: " + ncomp.to_string(),
         )
@@ -771,6 +773,28 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       )
     } else if jpeg_unsupported_sof(marker) is Some(kind) {
       raise UnsupportedFeature(kind + " JPEG not supported")
+    } else if marker == 0xE0 {
+      // APP0: JFIF implies YCbCr for three components.
+      // (libjpeg only recognizes it with at least 14 bytes of data.)
+      if seg_len >= 16 &&
+        data[pos + 2] == b'J' &&
+        data[pos + 3] == b'F' &&
+        data[pos + 4] == b'I' &&
+        data[pos + 5] == b'F' &&
+        data[pos + 6] == b'\x00' {
+        saw_jfif = true
+      }
+    } else if marker == 0xEE {
+      // APP14 "Adobe": the color transform flag (0 = none, 1 = YCbCr,
+      // 2 = YCCK).
+      if seg_len >= 14 &&
+        data[pos + 2] == b'A' &&
+        data[pos + 3] == b'd' &&
+        data[pos + 4] == b'o' &&
+        data[pos + 5] == b'b' &&
+        data[pos + 6] == b'e' {
+        adobe_transform = Some(data[pos + 13].to_int())
+      }
     } else if marker == 0xDD {
       // DRI - Define Restart Interval (in MCUs, 0 = disabled)
       restart_interval = seg_u16(pos + 2)
@@ -893,7 +917,60 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
     )
   })
   let out_buf = FixedArray::make(width * height * 4, b'\xFF')
-  if ncomp == 1 {
+  // Color space as libjpeg-turbo infers it from the markers / component IDs.
+  let space = if ncomp == 1 {
+    JpegGray
+  } else if ncomp == 3 {
+    let ids = (fi.components[0].id, fi.components[1].id, fi.components[2].id)
+    if saw_jfif {
+      JpegYCbCr
+    } else {
+      match adobe_transform {
+        Some(0) => JpegRgb
+        Some(_) => JpegYCbCr
+        None => if ids == (82, 71, 66) { JpegRgb } else { JpegYCbCr }
+      }
+    }
+  } else {
+    match adobe_transform {
+      None | Some(0) => JpegCmyk
+      Some(_) => JpegYcck
+    }
+  }
+  let t = jpeg_ycc_tables
+  if space is (JpegCmyk | JpegYcck) {
+    // libjpeg yields Adobe-style inverted CMYK (YCCK converts its first
+    // three channels to 255 - RGB). RGB is then computed like Pillow's
+    // CMYK -> RGB: nk - nk * c / 255 with c = 255 - raw, nk = raw K.
+    let p0 = planes[0]
+    let p1 = planes[1]
+    let p2 = planes[2]
+    let pk = planes[3]
+    for i in 0..<(width * height) {
+      let (c0, c1, c2) = if space is JpegYcck {
+        let y = p0[i]
+        let cb = p1[i]
+        let cr = p2[i]
+        (
+          255 - clamp_byte(y + t.cr_r[cr]).to_int(),
+          255 - clamp_byte(y + ((t.cb_g[cb] + t.cr_g[cr]) >> 16)).to_int(),
+          255 - clamp_byte(y + t.cb_b[cb]).to_int(),
+        )
+      } else {
+        (p0[i], p1[i], p2[i])
+      }
+      let nk = pk[i]
+      out_buf[i * 4] = jpeg_cmyk_channel(c0, nk)
+      out_buf[i * 4 + 1] = jpeg_cmyk_channel(c1, nk)
+      out_buf[i * 4 + 2] = jpeg_cmyk_channel(c2, nk)
+    }
+  } else if space is JpegRgb {
+    for i in 0..<(width * height) {
+      out_buf[i * 4] = planes[0][i].to_byte()
+      out_buf[i * 4 + 1] = planes[1][i].to_byte()
+      out_buf[i * 4 + 2] = planes[2][i].to_byte()
+    }
+  } else if space is JpegGray {
     let p = planes[0]
     for i in 0..<(width * height) {
       let v = p[i].to_byte()
@@ -901,9 +978,8 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
       out_buf[i * 4 + 1] = v
       out_buf[i * 4 + 2] = v
     }
-  } else {
+  } else if space is JpegYCbCr {
     // YCbCr -> RGB with libjpeg's fixed-point tables.
-    let t = jpeg_ycc_tables
     let py = planes[0]
     let pcb = planes[1]
     let pcr = planes[2]
@@ -917,6 +993,24 @@ pub fn decode_jpeg(data : Bytes) -> ImageData raise DecodeError {
     }
   }
   { width, height, data: Bytes::from_array(out_buf), }
+}
+
+///|
+priv enum JpegColorSpace {
+  JpegGray
+  JpegYCbCr
+  JpegRgb
+  JpegCmyk
+  JpegYcck
+}
+
+///|
+/// One RGB channel from a raw (Adobe-inverted) ink value and raw K, with
+/// Pillow's integer rounding: nk - (c * nk + 128) * 257 / 65536.
+fn jpeg_cmyk_channel(raw : Int32, nk : Int32) -> Byte {
+  let c = 255 - raw
+  let t = c * nk + 128
+  clamp_byte(nk - (((t >> 8) + t) >> 8))
 }
 
 ///|

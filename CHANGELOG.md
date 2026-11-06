@@ -4,6 +4,8 @@
 
 - `encode_webp_animation`: animated WebP from an `Animation` (lossless
   frames cropped to the changed region; delays in ms, loop count = `plays`)
+- JPEG decode: CMYK, YCCK and RGB (Adobe transform 0 / component IDs)
+  files; color space inferred like libjpeg-turbo, CMYK -> RGB like Pillow
 - WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
 - CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
 

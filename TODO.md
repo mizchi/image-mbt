@@ -4,7 +4,7 @@
 
 - [x] PNG decode (all color types and bit depths, tRNS, Adam7) / encode (RGBA8)
 - [x] APNG decode (frame compositing)
-- [x] JPEG decode (baseline / extended / progressive, restart markers; libjpeg-exact)
+- [x] JPEG decode (baseline / extended / progressive, restart markers, CMYK / YCCK / RGB; libjpeg-exact)
 - [x] JPEG encode (4:4:4 / 4:2:2 / 4:2:0; libjpeg-exact entropy data)
 - [x] GIF decode (animated, frame compositing) / encode (single frame)
 - [x] BMP decode (palette, RLE, 16/24/32-bit, bit fields) / encode
@@ -27,7 +27,7 @@
 
 - [ ] WebP lossy encode
 - [ ] TIFF: more pages, JPEG-in-TIFF; TIFF encode
-- [ ] JPEG: CMYK / Adobe files, optimized Huffman tables on encode
+- [ ] JPEG: optimized Huffman tables on encode
 - [ ] WebP encoder optimization (transforms / LZ77 / color cache)
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)
