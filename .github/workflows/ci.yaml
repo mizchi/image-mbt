@@ -21,11 +21,40 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Install AVIF test tools
+      # The js AVIF tests shell out to ffmpeg. A static build from GitHub
+      # Releases is cached between runs; apt (whose mirrors have stalled CI
+      # for 8+ minutes) is only a fallback when the download fails.
+      - name: Cache ffmpeg
         if: matrix.target == 'js'
-        # apt mirrors occasionally hang; fail fast instead of blocking CI.
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/ffmpeg
+          key: ffmpeg-btbn-master-linux64-gpl-v1
+      - name: Download ffmpeg
+        if: matrix.target == 'js' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        id: ffmpeg-download
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          mkdir -p ~/ffmpeg
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 120 \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
+            | tar -xJ -C ~/ffmpeg --strip-components=2 --wildcards '*/bin/ffmpeg'
+          ~/ffmpeg/ffmpeg -hide_banner -version | head -1
+      - name: Install ffmpeg from apt (fallback)
+        if: matrix.target == 'js' && steps.ffmpeg-cache.outputs.cache-hit != 'true' && steps.ffmpeg-download.outcome != 'success'
         timeout-minutes: 8
-        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
+        run: |
+          rm -rf ~/ffmpeg
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
+      - name: Check ffmpeg
+        if: matrix.target == 'js'
+        run: |
+          if [ -x ~/ffmpeg/ffmpeg ]; then echo "$HOME/ffmpeg" >> "$GITHUB_PATH"; fi
+          export PATH="$HOME/ffmpeg:$PATH"
+          ffmpeg -hide_banner -version | head -1
+          ffmpeg -hide_banner -encoders | grep -i av1
       - name: Moon update
         run: moon update
       - name: Moon check
