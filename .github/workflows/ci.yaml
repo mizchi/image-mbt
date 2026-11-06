@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +23,9 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Install AVIF test tools
         if: matrix.target == 'js'
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+        # apt mirrors occasionally hang; fail fast instead of blocking CI.
+        timeout-minutes: 8
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
       - name: Moon update
         run: moon update
       - name: Moon check
