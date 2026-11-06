@@ -26,7 +26,7 @@
 
 ## Next
 
-- [ ] WebP lossy encode: segments, rate-distortion mode decisions, alpha filtering
+- [ ] WebP lossy encode: segments / perceptual (SSIM) tuning, faster mode search
 - [ ] WebP lossless encoder: cross-color transform, meta prefix codes, faster search
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)

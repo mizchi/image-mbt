@@ -103,6 +103,10 @@ fn VP8BoolWriter::finish(self : VP8BoolWriter) -> Bytes {
 }
 
 ///|
+/// Scratch for `vp8_fdct` / `vp8_fwht` (encoding is single-threaded).
+let vp8_fdct_tmp : FixedArray[Int32] = FixedArray::make(16, 0)
+
+///|
 /// Forward 4x4 DCT of `src - ref` (both 32-stride) into `out` (libwebp's
 /// FTransform).
 fn vp8_fdct(
@@ -113,7 +117,7 @@ fn vp8_fdct(
   out : FixedArray[Int32],
   o : Int32,
 ) -> Unit {
-  let tmp = FixedArray::make(16, 0)
+  let tmp = vp8_fdct_tmp
   for i in 0..<4 {
     let d0 = src[s + i * 32] - pred[p + i * 32]
     let d1 = src[s + i * 32 + 1] - pred[p + i * 32 + 1]
@@ -144,7 +148,7 @@ fn vp8_fdct(
 ///|
 /// Forward WHT of the 16 DC coefficients (at `coeffs[n * 16]`).
 fn vp8_fwht(coeffs : FixedArray[Int32], out : FixedArray[Int32]) -> Unit {
-  let tmp = FixedArray::make(16, 0)
+  let tmp = vp8_fdct_tmp
   for i in 0..<4 {
     let a0 = coeffs[(i * 4 + 0) * 16] + coeffs[(i * 4 + 2) * 16]
     let a1 = coeffs[(i * 4 + 1) * 16] + coeffs[(i * 4 + 3) * 16]
@@ -357,12 +361,20 @@ fn vp8_sse(
 }
 
 ///|
-/// Base quantizer index for a quality of 0-100 (roughly libwebp's scale).
+/// Base quantizer index for each quality 0-100, with libwebp's mapping:
+/// q = 127 * (1 - c^(1/3)), c = quality * 2/3 below 75, 2 quality - 1 above
+/// (quality as a fraction).
+let vp8_quality_q : FixedArray[Int32] = [
+  127, 103, 96, 92, 89, 86, 83, 81, 79, 77, 75, 73, 72, 70, 69, 68, 66, 65, 64, 63,
+  62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 51, 50, 49, 48, 48, 47, 46, 45,
+  45, 44, 43, 43, 42, 41, 41, 40, 40, 39, 38, 38, 37, 37, 36, 36, 35, 35, 34, 33,
+  33, 32, 32, 31, 31, 30, 30, 29, 29, 28, 28, 28, 27, 27, 26, 26, 24, 23, 22, 21,
+  19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0,
+]
+
+///|
 fn vp8_quality_to_q(quality : Int32) -> Int32 {
-  let q = quality.clamp(min=0, max=100)
-  // Quality 100 -> 0, 75 -> ~28, 50 -> ~50, 0 -> 127 (slightly convex).
-  let x = 100 - q
-  vp8_clip((x * x * 127 + x * 100 * 127) / 20000, 127)
+  vp8_quality_q[quality.clamp(min=0, max=100)]
 }
 
 ///|
@@ -402,15 +414,7 @@ pub fn encode_webp_lossy(
     webp_put_le(vp8x, w - 1, 3)
     webp_put_le(vp8x, h - 1, 3)
     webp_put_chunk(body, "VP8X", vp8x.to_bytes())
-    // ALPH: lossless (method 1), no filter, alpha in the green channel.
-    let argb = FixedArray::make(w * h, 0)
-    for i in 0..<(w * h) {
-      argb[i] = 0xff000000 | (img.data[i * 4 + 3].to_int() << 8)
-    }
-    let alph = Buffer()
-    alph.write_byte(b'\x01')
-    alph.write_bytes(vp8l_encode_argb(argb, w, h, false, false))
-    webp_put_chunk(body, "ALPH", alph.to_bytes())
+    webp_put_chunk(body, "ALPH", webp_encode_alpha(img))
   }
   webp_put_chunk(body, "VP8 ", vp8)
   let b = body.to_bytes()
@@ -421,6 +425,57 @@ pub fn encode_webp_lossy(
   webp_put_le(out, b.length(), 4)
   out.write_bytes(b)
   out.to_bytes()
+}
+
+///|
+/// ALPH chunk payload: lossless (VP8L, alpha in the green channel) after
+/// the spatial filter (none / horizontal / vertical / gradient) that gives
+/// the smallest stream.
+fn webp_encode_alpha(img : ImageData) -> Bytes {
+  let w = img.width
+  let h = img.height
+  let a = FixedArray::makei(w * h, fn(i) { img.data[i * 4 + 3].to_int() })
+  let mut best : Bytes? = None
+  for filter in 0..<4 {
+    let argb = FixedArray::make(w * h, 0)
+    for y in 0..<h {
+      for x in 0..<w {
+        let i = y * w + x
+        // Predictors exactly as the decoder's unfilters.
+        let pred = if filter == 0 {
+          0
+        } else if y == 0 {
+          if x == 0 {
+            0
+          } else {
+            a[i - 1]
+          }
+        } else if filter == 1 {
+          if x == 0 {
+            a[i - w]
+          } else {
+            a[i - 1]
+          }
+        } else if filter == 2 {
+          a[i - w]
+        } else if x == 0 {
+          a[i - w]
+        } else {
+          vp8_clip8(a[i - 1] + a[i - w] - a[i - w - 1])
+        }
+        argb[i] = 0xff000000 | (((a[i] - pred) & 0xff) << 8)
+      }
+    }
+    let out = Buffer()
+    out.write_byte((1 | (filter << 2)).to_byte())
+    out.write_bytes(vp8l_encode_argb(argb, w, h, false, false))
+    let b = out.to_bytes()
+    match best {
+      Some(prev) if prev.length() <= b.length() => ()
+      _ => best = Some(b)
+    }
+  }
+  best.unwrap()
 }
 
 ///|
@@ -477,6 +532,310 @@ fn vp8_rgb_to_yuv(
 }
 
 ///|
+/// 16x16 / chroma modes (best by prediction error) that get the full RD
+/// evaluation.
+let vp8_mode_candidates = 4
+
+///|
+/// Modes 0..n-1 sorted by `err(mode)` (ascending).
+fn vp8_rank_modes(n : Int32, err : (Int32) -> Int32) -> Array[Int32] {
+  let e = FixedArray::makei(n, fn(m) { err(m) })
+  let r = Array::makei(n, fn(i) { i })
+  r.sort_by(fn(a, b) { e[a] - e[b] })
+  r
+}
+
+///|
+/// 4x4 modes (best by prediction error) that get the full RD evaluation.
+let vp8_i4_candidates = 4
+
+///|
+/// Lambda scale for the rate-distortion mode decisions.
+let vp8_lambda_scale = 4
+
+///|
+/// Approximate bits (1/256) of each 16x16 / chroma mode in its tree.
+let vp8_i16_mode_bits : FixedArray[Int32] = [512, 512, 512, 512]
+
+///|
+let vp8_uv_mode_bits : FixedArray[Int32] = [256, 768, 512, 768]
+
+///|
+/// Cost tables (1/256 bit) of coding 0 / 1 with probability p / 256.
+let vp8_cost0 : FixedArray[Int32] = FixedArray::makei(256, fn(p) {
+  vp8_bit_cost(false, if p < 1 { 1 } else { p })
+})
+
+///|
+let vp8_cost1 : FixedArray[Int32] = FixedArray::makei(256, fn(p) {
+  vp8_bit_cost(true, if p < 1 { 1 } else { p })
+})
+
+///|
+/// Bits (1/256) to code one block with the default probabilities: the
+/// token tree of `vp8_put_coeffs`, summing costs instead of recording.
+fn vp8_token_cost(
+  levels : FixedArray[Int32],
+  lo : Int32,
+  t : Int32,
+  ctx : Int32,
+  first : Int32,
+  last : Int32,
+) -> Int32 {
+  let proba = vp8_coeffs_proba0
+  let c0 = vp8_cost0
+  let c1 = vp8_cost1
+  let base = t * 8 * 33
+  let mut n = first
+  let mut p = base + vp8_bands[n] * 33 + ctx * 11
+  if last < 0 {
+    return c0[proba[p]]
+  }
+  let mut cost = c1[proba[p]]
+  while n < 16 {
+    let c = levels[lo + n]
+    n += 1
+    let v = if c < 0 { -c } else { c }
+    if v == 0 {
+      cost += c0[proba[p + 1]]
+      p = base + vp8_bands[n] * 33
+      continue
+    }
+    cost += c1[proba[p + 1]]
+    if v == 1 {
+      cost += c0[proba[p + 2]]
+      p = base + vp8_bands[n] * 33 + 11
+    } else {
+      cost += c1[proba[p + 2]]
+      if v <= 4 {
+        cost += c0[proba[p + 3]]
+        if v == 2 {
+          cost += c0[proba[p + 4]]
+        } else {
+          cost += c1[proba[p + 4]] +
+            (if v == 4 { c1[proba[p + 5]] } else { c0[proba[p + 5]] })
+        }
+      } else if v <= 10 {
+        cost += c1[proba[p + 3]] + c0[proba[p + 6]]
+        if v <= 6 {
+          cost += c0[proba[p + 7]] + (if v == 6 { c1[159] } else { c0[159] })
+        } else {
+          cost += c1[proba[p + 7]] +
+            (if v >= 9 { c1[165] } else { c0[165] }) +
+            (if (v & 1) == 0 { c1[145] } else { c0[145] })
+        }
+      } else {
+        cost += c1[proba[p + 3]] + c1[proba[p + 6]]
+        // Extra bits of the categories (about one bit each, plus the
+        // category bits).
+        let (cat_cost, nbits) = if v < 3 + (8 << 1) {
+          (c0[proba[p + 8]] + c0[proba[p + 9]], 3)
+        } else if v < 3 + (8 << 2) {
+          (c0[proba[p + 8]] + c1[proba[p + 9]], 4)
+        } else if v < 3 + (8 << 3) {
+          (c1[proba[p + 8]] + c0[proba[p + 10]], 5)
+        } else {
+          (c1[proba[p + 8]] + c1[proba[p + 10]], 11)
+        }
+        cost += cat_cost + nbits * 256
+      }
+      p = base + vp8_bands[n] * 33 + 22
+    }
+    cost += 256 // sign
+    if n == 16 {
+      return cost
+    }
+    if n > last {
+      return cost + c0[proba[p]]
+    }
+    cost += c1[proba[p]]
+  }
+  cost
+}
+
+///|
+/// Token bits of an i16 macroblock (Y2 + 16 AC blocks), propagating the
+/// non-zero contexts like the decoder. `ctx_y`: 4 top + 4 left flags.
+fn vp8_cost_i16(
+  levels : FixedArray[Int32],
+  lasts : FixedArray[Int32],
+  ctx_y : FixedArray[Int32],
+  dc_ctx : Int32,
+) -> Int32 {
+  let mut c = vp8_token_cost(levels, 0, 1, dc_ctx, 0, lasts[0])
+  let t = ctx_y.copy()
+  for n in 0..<16 {
+    let bx = n & 3
+    let by = n >> 2
+    let last = if lasts[n + 1] >= 1 { lasts[n + 1] } else { -1 }
+    c += vp8_token_cost(levels, (n + 1) * 16, 0, t[bx] + t[4 + by], 1, last)
+    let f = if last >= 1 { 1 } else { 0 }
+    t[bx] = f
+    t[4 + by] = f
+  }
+  c
+}
+
+///|
+/// Token bits of the 8 chroma blocks.
+fn vp8_cost_uv(
+  levels : FixedArray[Int32],
+  lasts : FixedArray[Int32],
+  top_nz : FixedArray[Int32],
+  left_nz : FixedArray[Int32],
+  mb_x : Int32,
+) -> Int32 {
+  let t = FixedArray::make(8, 0)
+  for k in 0..<4 {
+    t[k] = top_nz[mb_x * 9 + 4 + k]
+    t[4 + k] = left_nz[4 + k]
+  }
+  let mut c = 0
+  for k in 0..<8 {
+    let ch = k >> 2
+    let kk = k & 3
+    let ti = ch * 2 + (kk & 1)
+    let li = 4 + ch * 2 + (kk >> 1)
+    c += vp8_token_cost(
+      levels,
+      (17 + k) * 16,
+      2,
+      t[ti] + t[li],
+      0,
+      lasts[17 + k],
+    )
+    let f = if lasts[17 + k] >= 0 { 1 } else { 0 }
+    t[ti] = f
+    t[li] = f
+  }
+  c
+}
+
+///|
+/// Work buffers for the residual coders, allocated once per frame.
+priv struct VP8EncScratch {
+  blk : FixedArray[Int32]
+  tmp : FixedArray[Int32]
+  wht : FixedArray[Int32]
+  whtl : FixedArray[Int32]
+  cb : FixedArray[Int32]
+}
+
+///|
+fn VP8EncScratch::new() -> VP8EncScratch {
+  {
+    blk: FixedArray::make(256, 0),
+    tmp: FixedArray::make(256, 0),
+    wht: FixedArray::make(16, 0),
+    whtl: FixedArray::make(256, 0),
+    cb: FixedArray::make(128, 0),
+  }
+}
+
+///|
+/// Code the 16x16 luma residual of `buf` (holding the prediction): forward
+/// DCT / WHT, quantization into `levels[0..17*16)` / `lasts[0..17)`, and the
+/// decoder's reconstruction back into `buf`. `qm`: y1 dc / ac, y2 dc / ac,
+/// uv dc / ac.
+fn vp8_code_i16(
+  src : FixedArray[Int32],
+  buf : FixedArray[Int32],
+  yd : Int32,
+  qm : Array[Int32],
+  levels : FixedArray[Int32],
+  lasts : FixedArray[Int32],
+  ws : VP8EncScratch,
+) -> Unit {
+  let blk = ws.blk
+  for n in 0..<16 {
+    let d = yd + (n & 3) * 4 + (n >> 2) * 128
+    vp8_fdct(src, d, buf, d, blk, n * 16)
+  }
+  let tmp = ws.tmp
+  for n in 0..<16 {
+    tmp[n * 16] = blk[n * 16]
+  }
+  let wht = ws.wht
+  vp8_fwht(tmp, wht)
+  lasts[0] = vp8_quantize(wht, 0, qm[2], qm[3], 0, levels, 0)
+  for n in 0..<16 {
+    lasts[n + 1] = vp8_quantize(
+      blk,
+      n * 16,
+      qm[0],
+      qm[1],
+      1,
+      levels,
+      (n + 1) * 16,
+    )
+  }
+  // Reconstruct exactly like the decoder.
+  if lasts[0] > 0 {
+    let whtl = ws.whtl
+    vp8_transform_wht(wht, whtl)
+    for n in 0..<16 {
+      blk[n * 16] = whtl[n * 16]
+    }
+  } else {
+    let dc0 = (wht[0] + 3) >> 3
+    for n in 0..<16 {
+      blk[n * 16] = dc0
+    }
+  }
+  for n in 0..<16 {
+    let d = yd + (n & 3) * 4 + (n >> 2) * 128
+    if lasts[n + 1] >= 1 || blk[n * 16] != 0 {
+      vp8_transform(blk, n * 16, buf, d)
+    }
+  }
+}
+
+///|
+/// Code the U / V residuals of `buf` (holding the predictions) into
+/// `levels[17*16..)` / `lasts[17..25)` and reconstruct them.
+fn vp8_code_uv(
+  src : FixedArray[Int32],
+  buf : FixedArray[Int32],
+  qm : Array[Int32],
+  levels : FixedArray[Int32],
+  lasts : FixedArray[Int32],
+  ws : VP8EncScratch,
+) -> Unit {
+  let cb = ws.cb
+  for k in 0..<8 {
+    let base = if k < 4 { vp8_u_off } else { vp8_v_off }
+    let kk = k & 3
+    let d = base + (kk & 1) * 4 + (kk >> 1) * 128
+    vp8_fdct(src, d, buf, d, cb, k * 16)
+    lasts[17 + k] = vp8_quantize(
+      cb,
+      k * 16,
+      qm[4],
+      qm[5],
+      0,
+      levels,
+      (17 + k) * 16,
+    )
+  }
+  let any_u = lasts[17] >= 0 ||
+    lasts[18] >= 0 ||
+    lasts[19] >= 0 ||
+    lasts[20] >= 0
+  let any_v = lasts[21] >= 0 ||
+    lasts[22] >= 0 ||
+    lasts[23] >= 0 ||
+    lasts[24] >= 0
+  for k in 0..<8 {
+    let base = if k < 4 { vp8_u_off } else { vp8_v_off }
+    let kk = k & 3
+    let d = base + (kk & 1) * 4 + (kk >> 1) * 128
+    if (k < 4 && any_u) || (k >= 4 && any_v) {
+      vp8_transform(cb, k * 16, buf, d)
+    }
+  }
+}
+
+///|
 fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
   let w = img.width
   let h = img.height
@@ -499,8 +858,12 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
   }
   let uv_dc = vp8_dc_table[if q > 117 { 117 } else { q }]
   let uv_ac = vp8_ac_table[q]
-  // Mode bits are weighed against squared error with this lambda.
-  let lambda = y1_ac * y1_ac / 8 + 1
+  // Rate-distortion lambda (squared error per bit).
+  let lambda = vp8_lambda_scale * y1_ac * y1_ac / 128 + 1
+  let qm = [y1_dc, y1_ac, y2_dc, y2_ac, uv_dc, uv_ac]
+  let tlevels = FixedArray::make(25 * 16, 0)
+  let tlasts = FixedArray::make(25, -1)
+  let ws = VP8EncScratch::new()
   let modes_bw = VP8BoolWriter::new()
   let events : Array[Int32] = []
   // Decoder-identical working state.
@@ -513,8 +876,6 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
   let coeffs = FixedArray::make(384, 0)
   let levels = FixedArray::make(25 * 16, 0)
   let lasts = FixedArray::make(25, -1)
-  let dc_in = FixedArray::make(16, 0)
-  let whtl = FixedArray::make(256, 0)
   let yd = vp8_y_off
   let ud = vp8_u_off
   let vd = vp8_v_off
@@ -597,32 +958,79 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
           src[vd + j * 32 + i] = sv[(mb_y * 8 + j) * uvs + mb_x * 8 + i]
         }
       }
-      // --- Luma: best 16x16 mode by prediction error. `pred` shares the
-      // borders with `yuv`; trials only overwrite block interiors.
+      // Mode decisions are rate-distortion optimized: each candidate is
+      // quantized and reconstructed (in `pred`, which shares the borders
+      // with `yuv`) and scored as SSE * 256 + lambda * token bits (1/256).
       yuv.blit_to(pred, len=yuv.length())
-      let mut best16 = 0
-      let mut best16_cost = 0x7fffffff
-      for mode in 0..<4 {
+      let ctx_y = FixedArray::make(8, 0) // 4 top + 4 left non-zero flags
+      let load_ctx = fn() {
+        for k in 0..<4 {
+          ctx_y[k] = top_nz[mb_x * 9 + k]
+          ctx_y[4 + k] = left_nz[k]
+        }
+      }
+      // --- Luma 16x16.
+      let r16 = vp8_rank_modes(4, fn(mode) {
         vp8_predict_block(pred, yd, 16, vp8_check_mode(mb_x, mb_y, mode))
-        let c = vp8_sse(src, yd, pred, yd, 16) + lambda * 2
+        vp8_sse(src, yd, pred, yd, 16)
+      })
+      let mut best16 = 0
+      let mut best16_cost = 0x7fffffffffffffffL
+      for ri in 0..<vp8_mode_candidates {
+        let mode = r16[ri]
+        vp8_predict_block(pred, yd, 16, vp8_check_mode(mb_x, mb_y, mode))
+        vp8_code_i16(src, pred, yd, qm, tlevels, tlasts, ws)
+        load_ctx()
+        let dc_ctx = top_nz[mb_x * 9 + 8] + left_nz[8]
+        let r = vp8_cost_i16(tlevels, tlasts, ctx_y, dc_ctx) +
+          vp8_i16_mode_bits[mode]
+        let c = vp8_sse(src, yd, pred, yd, 16).to_int64() * 256L +
+          lambda.to_int64() * r.to_int64()
         if c < best16_cost {
           best16_cost = c
           best16 = mode
         }
       }
-      // --- Luma: 4x4 modes, reconstructing each subblock in turn.
+      // --- Luma 4x4, reconstructing each subblock in turn.
       let save = yuv.copy()
-      let mut cost4 = lambda * 24 // the i4 flag and mode overhead
+      // The i4 flag and the extra mode bits (vs one i16 mode).
+      let mut cost4 = lambda.to_int64() * (3L * 256L)
       let lv4 = FixedArray::make(16 * 16, 0)
       let last4 = FixedArray::make(16, -1)
+      let tl = FixedArray::make(16, 0)
+      let rank = Array::makei(10, fn(i) { i })
+      let rank_cost = FixedArray::make(10, 0)
+      load_ctx()
       for n in 0..<16 {
         let d = yd + (n & 3) * 4 + (n >> 2) * 128
-        let mut best = 0
-        let mut best_cost = 0x7fffffff
+        let bx = n & 3
+        let by = n >> 2
+        let ctx = ctx_y[bx] + ctx_y[4 + by]
+        // Rank the modes by prediction error; the best few get the full
+        // rate-distortion evaluation.
         for mode in 0..<10 {
           vp8_predict4(pred, d, mode)
-          let bits = vp8_bmode_paths[mode].length()
-          let c = vp8_sse(src, d, pred, d, 4) + lambda * bits
+          let e = vp8_sse(src, d, pred, d, 4) * 256 +
+            lambda * vp8_bmode_paths[mode].length() * 256
+          rank_cost[mode] = e
+          rank[mode] = mode
+        }
+        rank.sort_by(fn(a, b) { rank_cost[a] - rank_cost[b] })
+        let mut best = 0
+        let mut best_cost = 0x7fffffffffffffffL
+        for ri in 0..<vp8_i4_candidates {
+          let mode = rank[ri]
+          vp8_predict4(pred, d, mode)
+          coeffs.fill(0)
+          vp8_fdct(src, d, pred, d, coeffs, 0)
+          let last = vp8_quantize(coeffs, 0, y1_dc, y1_ac, 0, tl, 0)
+          if last >= 0 {
+            vp8_transform(coeffs, 0, pred, d)
+          }
+          let r = vp8_token_cost(tl, 0, 3, ctx, 0, last) +
+            vp8_bmode_paths[mode].length() * 256
+          let c = vp8_sse(src, d, pred, d, 4).to_int64() * 256L +
+            lambda.to_int64() * r.to_int64()
           if c < best_cost {
             best_cost = c
             best = mode
@@ -637,6 +1045,9 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
         if last4[n] >= 0 {
           vp8_transform(coeffs, 0, yuv, d)
         }
+        let f = if last4[n] >= 0 { 1 } else { 0 }
+        ctx_y[bx] = f
+        ctx_y[4 + by] = f
         // Later subblocks predict from this reconstruction.
         for yy in 0..<4 {
           for xx in 0..<4 {
@@ -662,62 +1073,27 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
         }
       } else {
         vp8_predict_block(yuv, yd, 16, vp8_check_mode(mb_x, mb_y, best16))
-        // Residual DCTs; DCs go through the WHT (Y2 block = index 0).
-        let blk = FixedArray::make(256, 0)
-        for n in 0..<16 {
-          let d = yd + (n & 3) * 4 + (n >> 2) * 128
-          vp8_fdct(src, d, yuv, d, blk, n * 16)
-        }
-        for n in 0..<16 {
-          dc_in[n] = blk[n * 16]
-        }
-        let wht = FixedArray::make(16, 0)
-        let tmp = FixedArray::make(256, 0)
-        for n in 0..<16 {
-          tmp[n * 16] = dc_in[n]
-        }
-        vp8_fwht(tmp, wht)
-        lasts[0] = vp8_quantize(wht, 0, y2_dc, y2_ac, 0, levels, 0)
-        for n in 0..<16 {
-          lasts[n + 1] = vp8_quantize(
-            blk,
-            n * 16,
-            y1_dc,
-            y1_ac,
-            1,
-            levels,
-            (n + 1) * 16,
-          )
-        }
-        // Reconstruct exactly like the decoder.
-        whtl.fill(0)
-        if lasts[0] > 0 {
-          vp8_transform_wht(wht, whtl)
-          for n in 0..<16 {
-            blk[n * 16] = whtl[n * 16]
-          }
-        } else {
-          let dc0 = (wht[0] + 3) >> 3
-          for n in 0..<16 {
-            blk[n * 16] = dc0
-          }
-        }
-        for n in 0..<16 {
-          let d = yd + (n & 3) * 4 + (n >> 2) * 128
-          let any = lasts[n + 1] >= 1 || blk[n * 16] != 0
-          if any {
-            vp8_transform(blk, n * 16, yuv, d)
-          }
-        }
+        vp8_code_i16(src, yuv, yd, qm, levels, lasts, ws)
       }
-      // --- Chroma: best mode for U and V together.
-      let mut best_uv = 0
-      let mut best_uv_cost = 0x7fffffff
-      for mode in 0..<4 {
+      // --- Chroma (U and V share the mode).
+      let ruv = vp8_rank_modes(4, fn(mode) {
         let m = vp8_check_mode(mb_x, mb_y, mode)
         vp8_predict_block(pred, ud, 8, m)
         vp8_predict_block(pred, vd, 8, m)
-        let c = vp8_sse(src, ud, pred, ud, 8) + vp8_sse(src, vd, pred, vd, 8)
+        vp8_sse(src, ud, pred, ud, 8) + vp8_sse(src, vd, pred, vd, 8)
+      })
+      let mut best_uv = 0
+      let mut best_uv_cost = 0x7fffffffffffffffL
+      for ri in 0..<vp8_mode_candidates {
+        let mode = ruv[ri]
+        let m = vp8_check_mode(mb_x, mb_y, mode)
+        vp8_predict_block(pred, ud, 8, m)
+        vp8_predict_block(pred, vd, 8, m)
+        vp8_code_uv(src, pred, qm, tlevels, tlasts, ws)
+        let r = vp8_cost_uv(tlevels, tlasts, top_nz, left_nz, mb_x) +
+          vp8_uv_mode_bits[mode]
+        let dist = vp8_sse(src, ud, pred, ud, 8) + vp8_sse(src, vd, pred, vd, 8)
+        let c = dist.to_int64() * 256L + lambda.to_int64() * r.to_int64()
         if c < best_uv_cost {
           best_uv_cost = c
           best_uv = mode
@@ -726,38 +1102,7 @@ fn vp8_encode_frame(img : ImageData, q : Int32) -> Bytes {
       let muv = vp8_check_mode(mb_x, mb_y, best_uv)
       vp8_predict_block(yuv, ud, 8, muv)
       vp8_predict_block(yuv, vd, 8, muv)
-      let cb = FixedArray::make(16 * 8, 0)
-      for k in 0..<8 {
-        let base = if k < 4 { ud } else { vd }
-        let kk = k & 3
-        let d = base + (kk & 1) * 4 + (kk >> 1) * 128
-        vp8_fdct(src, d, yuv, d, cb, k * 16)
-        lasts[17 + k] = vp8_quantize(
-          cb,
-          k * 16,
-          uv_dc,
-          uv_ac,
-          0,
-          levels,
-          (17 + k) * 16,
-        )
-      }
-      let any_u = lasts[17] >= 0 ||
-        lasts[18] >= 0 ||
-        lasts[19] >= 0 ||
-        lasts[20] >= 0
-      let any_v = lasts[21] >= 0 ||
-        lasts[22] >= 0 ||
-        lasts[23] >= 0 ||
-        lasts[24] >= 0
-      for k in 0..<8 {
-        let base = if k < 4 { ud } else { vd }
-        let kk = k & 3
-        let d = base + (kk & 1) * 4 + (kk >> 1) * 128
-        if (k < 4 && any_u) || (k >= 4 && any_v) {
-          vp8_transform(cb, k * 16, yuv, d)
-        }
-      }
+      vp8_code_uv(src, yuv, qm, levels, lasts, ws)
       // --- Tokens (skip when nothing is coded).
       let first_y = if use_i4 { 0 } else { 1 }
       let mut coded = false

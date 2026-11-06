@@ -85,9 +85,9 @@ test "encode_webp_lossy: output decodes like libwebp (Pillow CRCs)" {
   // CRC-32 of Pillow's RGBA decode of these encoder outputs; our decoder
   // is libwebp-exact, so it must produce the same pixels.
   let cases = [
-    (lossy_test_image(64, 48, 7, false), 75, 0x26BB811D),
-    (lossy_test_image(37, 23, 8, true), 40, 0x817B9876),
-    (lossy_test_image(130, 97, 9, false), 95, 0xE7EBFFA9),
+    (lossy_test_image(64, 48, 7, false), 75, 0x8110BB1E),
+    (lossy_test_image(37, 23, 8, true), 40, 0x1B9D47C6),
+    (lossy_test_image(130, 97, 9, false), 95, 0x03436C28),
   ]
   for c in cases {
     let (img, q, crc) = c
