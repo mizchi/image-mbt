@@ -54,11 +54,13 @@ pub fn encode_gif_animation(Animation) -> Bytes raise EncodeError
 
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
-pub fn encode_jpeg(ImageData, quality? : Int32, subsampling? : JpegSubsampling) -> Bytes raise EncodeError
+pub fn encode_jpeg(ImageData, quality? : Int32, subsampling? : JpegSubsampling, optimize? : Bool) -> Bytes raise EncodeError
 
 pub fn encode_png(ImageData, color? : PngColorMode, compression? : PngCompression) -> Bytes raise EncodeError
 
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
+
+pub fn encode_webp_animation(Animation) -> Bytes raise EncodeError
 
 pub fn package_name() -> String
 

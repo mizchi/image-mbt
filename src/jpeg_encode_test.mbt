@@ -112,3 +112,26 @@ test "jpeg_encode quality affects file size" {
   let jpeg_q95 = @image.encode_jpeg(img, quality=95)
   assert_true(jpeg_q10.length() < jpeg_q95.length())
 }
+
+///|
+test "jpeg optimize: same pixels as standard tables, smaller file" {
+  let w = 40
+  let h = 30
+  let px = FixedArray::make(w * h * 4, b'\xFF')
+  for i in 0..<(w * h) {
+    px[i * 4] = (i * 7).to_byte()
+    px[i * 4 + 1] = (i / 3).to_byte()
+    px[i * 4 + 2] = (i % 50 * 5).to_byte()
+  }
+  let img : @image.ImageData = {
+    width: w,
+    height: h,
+    data: Bytes::from_array(px),
+  }
+  for sub in [@image.Yuv444, @image.Yuv422, @image.Yuv420] {
+    let std = @image.encode_jpeg(img, subsampling=sub)
+    let opt = @image.encode_jpeg(img, subsampling=sub, optimize=true)
+    assert_true(opt.length() < std.length())
+    assert_eq(@image.decode_jpeg(opt).data, @image.decode_jpeg(std).data)
+  }
+}

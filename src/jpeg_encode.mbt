@@ -94,6 +94,91 @@ fn build_huffman_encode_table(
 }
 
 ///|
+/// Optimal Huffman table for symbol frequencies `freq` (256 entries), like
+/// libjpeg's jpeg_gen_optimal_table: a pseudo-symbol 256 keeps any code
+/// from being all ones, ties pick the larger symbol, and lengths are
+/// limited to 16 bits. Returns (bits[0..16], values).
+fn jpeg_gen_optimal_table(
+  counts : FixedArray[Int32],
+) -> (FixedArray[Int32], FixedArray[Int32]) {
+  let freq = FixedArray::make(257, 0)
+  for i in 0..<256 {
+    freq[i] = counts[i]
+  }
+  freq[256] = 1
+  let codesize = FixedArray::make(257, 0)
+  let others = FixedArray::make(257, -1)
+  while true {
+    let mut c1 = -1
+    let mut v = 1000000000
+    for i in 0..<=256 {
+      if freq[i] != 0 && freq[i] <= v {
+        v = freq[i]
+        c1 = i
+      }
+    }
+    let mut c2 = -1
+    v = 1000000000
+    for i in 0..<=256 {
+      if freq[i] != 0 && freq[i] <= v && i != c1 {
+        v = freq[i]
+        c2 = i
+      }
+    }
+    if c2 < 0 {
+      break
+    }
+    freq[c1] += freq[c2]
+    freq[c2] = 0
+    codesize[c1] += 1
+    while others[c1] >= 0 {
+      c1 = others[c1]
+      codesize[c1] += 1
+    }
+    others[c1] = c2
+    codesize[c2] += 1
+    while others[c2] >= 0 {
+      c2 = others[c2]
+      codesize[c2] += 1
+    }
+  }
+  let bits = FixedArray::make(33, 0)
+  for i in 0..<=256 {
+    if codesize[i] > 0 {
+      bits[codesize[i]] += 1
+    }
+  }
+  // Limit code lengths to 16 bits (JPEG Annex K.3).
+  for i = 32; i > 16; i = i - 1 {
+    while bits[i] > 0 {
+      let mut j = i - 2
+      while bits[j] == 0 {
+        j -= 1
+      }
+      bits[i] -= 2
+      bits[i - 1] += 1
+      bits[j + 1] += 2
+      bits[j] -= 1
+    }
+  }
+  // Remove the pseudo-symbol 256 from the longest codes.
+  let mut i = 16
+  while bits[i] == 0 {
+    i -= 1
+  }
+  bits[i] -= 1
+  let vals : Array[Int32] = []
+  for len in 1..<=32 {
+    for sym in 0..<256 {
+      if codesize[sym] == len {
+        vals.push(sym)
+      }
+    }
+  }
+  (FixedArray::makei(17, fn(k) { bits[k] }), FixedArray::from_array(vals))
+}
+
+///|
 // Annex K.3
 let jpeg_huff_bits_dc_luma : FixedArray[Int32] = [
   0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
@@ -215,6 +300,31 @@ fn encode_dc(
   bw.write_bits(table.codes[cat], table.lengths[cat])
   if cat > 0 {
     bw.write_bits(jpeg_bit_payload(diff, cat), cat)
+  }
+}
+
+///|
+/// Count the AC symbols `encode_ac` would emit for `coeffs`.
+fn jpeg_count_ac(
+  coeffs : FixedArray[Int32],
+  counts : FixedArray[Int32],
+) -> Unit {
+  let mut run = 0
+  for i in 1..<64 {
+    let v = coeffs[i]
+    if v == 0 {
+      run += 1
+    } else {
+      while run > 15 {
+        counts[0xF0] += 1
+        run -= 16
+      }
+      counts[(run << 4) | jpeg_bit_category(v)] += 1
+      run = 0
+    }
+  }
+  if run > 0 {
+    counts[0] += 1
   }
 }
 
@@ -386,10 +496,15 @@ pub(all) enum JpegSubsampling {
 /// downsampling, islow integer FDCT and quantization, standard Huffman
 /// tables), so for the same quality and subsampling the entropy-coded data
 /// is identical to libjpeg's (e.g. Pillow with `optimize=False`).
+///
+/// `optimize=true` builds Huffman tables from the image's own symbol
+/// statistics (two passes), like libjpeg's `optimize_coding` / Pillow's
+/// `optimize=True`; tables and entropy-coded data then match those too.
 pub fn encode_jpeg(
   img : ImageData,
   quality~ : Int32 = 85,
   subsampling~ : JpegSubsampling = Yuv444,
+  optimize~ : Bool = false,
 ) -> Bytes raise EncodeError {
   let width = img.width
   let height = img.height
@@ -428,38 +543,6 @@ pub fn encode_jpeg(
   let quant_chroma = jpeg_scale_quant_table(jpeg_std_chrom_quant, q)
   let div_luma = JpegQuantDivisors::new(quant_luma)
   let div_chroma = JpegQuantDivisors::new(quant_chroma)
-  let dc_luma = build_huffman_encode_table(
-    jpeg_huff_bits_dc_luma, jpeg_huff_vals_dc_luma,
-  )
-  let dc_chroma = build_huffman_encode_table(
-    jpeg_huff_bits_dc_chroma, jpeg_huff_vals_dc_chroma,
-  )
-  let ac_luma = build_huffman_encode_table(
-    jpeg_huff_bits_ac_luma, jpeg_huff_vals_ac_luma,
-  )
-  let ac_chroma = build_huffman_encode_table(
-    jpeg_huff_bits_ac_chroma, jpeg_huff_vals_ac_chroma,
-  )
-  let parts : Array[Bytes] = []
-  parts.push(jpeg_marker_soi())
-  parts.push(jpeg_marker_app0())
-  parts.push(jpeg_marker_dqt(0, quant_luma))
-  parts.push(jpeg_marker_dqt(1, quant_chroma))
-  parts.push(jpeg_marker_sof0(width, height, (hs << 4) | vs))
-  parts.push(
-    jpeg_marker_dht(0, 0, jpeg_huff_bits_dc_luma, jpeg_huff_vals_dc_luma),
-  )
-  parts.push(
-    jpeg_marker_dht(0, 1, jpeg_huff_bits_dc_chroma, jpeg_huff_vals_dc_chroma),
-  )
-  parts.push(
-    jpeg_marker_dht(1, 0, jpeg_huff_bits_ac_luma, jpeg_huff_vals_ac_luma),
-  )
-  parts.push(
-    jpeg_marker_dht(1, 1, jpeg_huff_bits_ac_chroma, jpeg_huff_vals_ac_chroma),
-  )
-  parts.push(jpeg_marker_sos())
-
   // Color conversion and downsampling. Luma covers ceil(W/8) x ceil(H/8)
   // blocks; chroma covers one block per MCU.
   let mcu_cols = (width + 8 * hs - 1) / (8 * hs)
@@ -487,68 +570,111 @@ pub fn encode_jpeg(
     c_stride,
     mcu_rows * 8,
   )
-  let bw = JpegBitWriter::new()
-  let prev_dc = FixedArray::make(3, 0)
   let work = FixedArray::make(64, 0)
   let coefs = FixedArray::make(64, 0)
-  // Encode the block at (bx, by) of `plane`, or a dummy block (zero AC,
-  // DC = previous block's DC) outside the component, like jccoefct.c.
-  let encode_block = fn(
-    plane : FixedArray[Int32],
-    stride : Int32,
-    bx : Int32,
-    by : Int32,
-    real : Bool,
-    quant : JpegQuantDivisors,
-    ci : Int32,
-    dc_table : HuffmanEncodeTable,
-    ac_table : HuffmanEncodeTable,
-  ) {
-    if real {
-      for yy in 0..<8 {
-        let row = (by * 8 + yy) * stride + bx * 8
-        for xx in 0..<8 {
-          work[yy * 8 + xx] = plane[row + xx] - 128
+  // Run the block pipeline in MCU order, calling `emit(coefs, dc_diff,
+  // table)` for each block (table 0 = luma, 1 = chroma). Blocks outside a
+  // component are dummy blocks (zero AC, DC = previous DC), like jccoefct.c.
+  let run_blocks = fn(emit : (FixedArray[Int32], Int32, Int32) -> Unit) {
+    let prev_dc = FixedArray::make(3, 0)
+    let block = fn(
+      plane : FixedArray[Int32],
+      stride : Int32,
+      bx : Int32,
+      by : Int32,
+      real : Bool,
+      quant : JpegQuantDivisors,
+      ci : Int32,
+    ) {
+      if real {
+        for yy in 0..<8 {
+          let row = (by * 8 + yy) * stride + bx * 8
+          for xx in 0..<8 {
+            work[yy * 8 + xx] = plane[row + xx] - 128
+          }
         }
+        jpeg_fdct(work)
+        jpeg_quantize(work, quant, coefs)
+      } else {
+        let dc = prev_dc[ci]
+        coefs.fill(0)
+        coefs[0] = dc
       }
-      jpeg_fdct(work)
-      jpeg_quantize(work, quant, coefs)
-    } else {
-      let dc = prev_dc[ci]
-      coefs.fill(0)
-      coefs[0] = dc
+      emit(coefs, coefs[0] - prev_dc[ci], if ci == 0 { 0 } else { 1 })
+      prev_dc[ci] = coefs[0]
     }
-    encode_dc(bw, coefs[0] - prev_dc[ci], dc_table)
-    prev_dc[ci] = coefs[0]
-    encode_ac(bw, coefs, ac_table)
-  }
-  for my in 0..<mcu_rows {
-    for mx in 0..<mcu_cols {
-      for v in 0..<vs {
-        for h in 0..<hs {
-          let bx = mx * hs + h
-          let by = my * vs + v
-          encode_block(
-            y_plane,
-            y_bw * 8,
-            bx,
-            by,
-            bx < y_bw && by < y_bh,
-            div_luma,
-            0,
-            dc_luma,
-            ac_luma,
-          )
+    for my in 0..<mcu_rows {
+      for mx in 0..<mcu_cols {
+        for v in 0..<vs {
+          for h in 0..<hs {
+            let bx = mx * hs + h
+            let by = my * vs + v
+            block(
+              y_plane,
+              y_bw * 8,
+              bx,
+              by,
+              bx < y_bw && by < y_bh,
+              div_luma,
+              0,
+            )
+          }
         }
+        block(cb_plane, c_stride, mx, my, true, div_chroma, 1)
+        block(cr_plane, c_stride, mx, my, true, div_chroma, 2)
       }
-      encode_block(
-        cb_plane, c_stride, mx, my, true, div_chroma, 1, dc_chroma, ac_chroma,
-      )
-      encode_block(
-        cr_plane, c_stride, mx, my, true, div_chroma, 2, dc_chroma, ac_chroma,
-      )
     }
   }
+  // Huffman tables: the standard ones, or (optimize) tables built from the
+  // symbol statistics of a first pass, like libjpeg's optimize_coding.
+  let (dc_specs, ac_specs) = if optimize {
+    let dc_counts = [FixedArray::make(256, 0), FixedArray::make(256, 0)]
+    let ac_counts = [FixedArray::make(256, 0), FixedArray::make(256, 0)]
+    run_blocks(fn(c, diff, t) {
+      dc_counts[t][jpeg_bit_category(diff)] += 1
+      jpeg_count_ac(c, ac_counts[t])
+    })
+    (
+      [
+        jpeg_gen_optimal_table(dc_counts[0]),
+        jpeg_gen_optimal_table(dc_counts[1]),
+      ],
+      [
+        jpeg_gen_optimal_table(ac_counts[0]),
+        jpeg_gen_optimal_table(ac_counts[1]),
+      ],
+    )
+  } else {
+    (
+      [
+        (jpeg_huff_bits_dc_luma, jpeg_huff_vals_dc_luma),
+        (jpeg_huff_bits_dc_chroma, jpeg_huff_vals_dc_chroma),
+      ],
+      [
+        (jpeg_huff_bits_ac_luma, jpeg_huff_vals_ac_luma),
+        (jpeg_huff_bits_ac_chroma, jpeg_huff_vals_ac_chroma),
+      ],
+    )
+  }
+  let dc_tables = dc_specs.map(fn(t) { build_huffman_encode_table(t.0, t.1) })
+  let ac_tables = ac_specs.map(fn(t) { build_huffman_encode_table(t.0, t.1) })
+  let parts : Array[Bytes] = []
+  parts.push(jpeg_marker_soi())
+  parts.push(jpeg_marker_app0())
+  parts.push(jpeg_marker_dqt(0, quant_luma))
+  parts.push(jpeg_marker_dqt(1, quant_chroma))
+  parts.push(jpeg_marker_sof0(width, height, (hs << 4) | vs))
+  // Same order as libjpeg's scan header: DC0, AC0, DC1, AC1.
+  for t in 0..<2 {
+    parts.push(jpeg_marker_dht(0, t, dc_specs[t].0, dc_specs[t].1))
+    parts.push(jpeg_marker_dht(1, t, ac_specs[t].0, ac_specs[t].1))
+  }
+  parts.push(jpeg_marker_sos())
+  let bw = JpegBitWriter::new()
+  run_blocks(fn(c, diff, t) {
+    encode_dc(bw, diff, dc_tables[t])
+    encode_ac(bw, c, ac_tables[t])
+  })
   bw.flush()
   parts.push(bw.to_bytes())
   parts.push(jpeg_marker_eoi())

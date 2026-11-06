@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.14.0
+
+- `encode_webp_animation`: animated WebP from an `Animation` (lossless
+  frames cropped to the changed region; delays in ms, loop count = `plays`)
+- JPEG decode: CMYK, YCCK and RGB (Adobe transform 0 / component IDs)
+  files; color space inferred like libjpeg-turbo, CMYK -> RGB like Pillow
+- `encode_jpeg(optimize~)`: per-image optimal Huffman tables (two passes),
+  identical to libjpeg's optimize_coding; DHT segments are written in
+  libjpeg's order (DC0, AC0, DC1, AC1)
+- `encode_webp` rewritten: real length-limited Huffman codes, LZ77 with
+  2-D distance codes, color cache, subtract-green + predictor or palette
+  transforms; files are 2-15x smaller than before (within 5-30% of
+  libwebp's lossless mode)
+- WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
+- CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
+
 ## 0.13.0
 
 - WebP decode: `decode_webp` and `decode_webp_frames` (lossy VP8,

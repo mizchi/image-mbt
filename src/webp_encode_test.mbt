@@ -1,320 +1,4 @@
 ///|
-let webp_test_code_length_code_order : FixedArray[Int32] = [
-  17, 18, 0, 1, 2, 3, 4, 5, 16, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-]
-
-///|
-fn read_u32le_at_for_webp_test(data : Bytes, pos : Int32) -> Int32 {
-  (data[pos].to_int() & 0xFF) |
-  ((data[pos + 1].to_int() & 0xFF) << 8) |
-  ((data[pos + 2].to_int() & 0xFF) << 16) |
-  ((data[pos + 3].to_int() & 0xFF) << 24)
-}
-
-///|
-fn webp_reverse_bits_for_test(value : Int32, count : Int32) -> Int32 {
-  let mut out = 0
-  let mut v = value
-  for _ in 0..<count {
-    out = (out << 1) | (v & 1)
-    v = v >> 1
-  }
-  out
-}
-
-///|
-fn webp_pack_argb_for_test(r : Int32, g : Int32, b : Int32, a : Int32) -> Int32 {
-  (a << 24) | (r << 16) | (g << 8) | b
-}
-
-///|
-fn webp_color_cache_index_for_test(color : Int32, bits : Int32) -> Int32 {
-  let hash = (color * 0x1E35A7BD) >> (32 - bits)
-  hash & ((1 << bits) - 1)
-}
-
-///|
-priv struct WebPTestPrefixCode {
-  lengths : FixedArray[Int32]
-  codes : FixedArray[Int32]
-  single_symbol : Int32?
-}
-
-///|
-fn webp_test_prefix_code_from_lengths(
-  lengths : FixedArray[Int32],
-) -> WebPTestPrefixCode {
-  let codes = FixedArray::make(lengths.length(), 0)
-  let mut used_count = 0
-  let mut single_symbol = -1
-  let mut max_len = 0
-  for symbol in 0..<lengths.length() {
-    let len = lengths[symbol]
-    if len > 0 {
-      used_count += 1
-      single_symbol = symbol
-      if len > max_len {
-        max_len = len
-      }
-    }
-  }
-  if used_count <= 1 {
-    return {
-      lengths,
-      codes,
-      single_symbol: Some(if single_symbol >= 0 { single_symbol } else { 0 }),
-    }
-  }
-
-  let bl_count = FixedArray::make(max_len + 1, 0)
-  for symbol in 0..<lengths.length() {
-    let len = lengths[symbol]
-    if len > 0 {
-      bl_count[len] += 1
-    }
-  }
-  let next_code = FixedArray::make(max_len + 1, 0)
-  let mut code = 0
-  for bits in 1..<=max_len {
-    code = (code + bl_count[bits - 1]) << 1
-    next_code[bits] = code
-  }
-  for symbol in 0..<lengths.length() {
-    let len = lengths[symbol]
-    if len > 0 {
-      codes[symbol] = webp_reverse_bits_for_test(next_code[len], len)
-      next_code[len] += 1
-    }
-  }
-  { lengths, codes, single_symbol: None, }
-}
-
-///|
-priv struct WebPTestBitReader {
-  data : Bytes
-  mut pos : Int32
-  mut bit_buf : Int32
-  mut bits_count : Int32
-}
-
-///|
-fn WebPTestBitReader::new(data : Bytes, pos : Int32) -> WebPTestBitReader {
-  { data, pos, bit_buf: 0, bits_count: 0, }
-}
-
-///|
-fn WebPTestBitReader::read_bits(
-  self : WebPTestBitReader,
-  count : Int32,
-) -> Int32 raise {
-  while self.bits_count < count {
-    assert_true(self.pos < self.data.length())
-    self.bit_buf = self.bit_buf |
-      ((self.data[self.pos].to_int() & 0xFF) << self.bits_count)
-    self.bits_count += 8
-    self.pos += 1
-  }
-  let value = self.bit_buf & ((1 << count) - 1)
-  self.bit_buf = self.bit_buf >> count
-  self.bits_count -= count
-  value
-}
-
-///|
-fn decode_webp_symbol_for_test(
-  br : WebPTestBitReader,
-  prefix : WebPTestPrefixCode,
-) -> Int32 raise {
-  match prefix.single_symbol {
-    Some(symbol) => symbol
-    None => {
-      let mut code = 0
-      let mut max_len = 0
-      for len in prefix.lengths {
-        if len > max_len {
-          max_len = len
-        }
-      }
-      for len in 1..<=max_len {
-        code = code | (br.read_bits(1) << (len - 1))
-        for symbol in 0..<prefix.lengths.length() {
-          if prefix.lengths[symbol] == len && prefix.codes[symbol] == code {
-            return symbol
-          }
-        }
-      }
-      panic()
-    }
-  }
-}
-
-///|
-fn decode_prefix_code_for_webp_test(
-  br : WebPTestBitReader,
-  alphabet_size : Int32,
-) -> WebPTestPrefixCode raise {
-  let is_simple = br.read_bits(1)
-  let lengths = FixedArray::make(alphabet_size, 0)
-  if is_simple == 1 {
-    let num_symbols = br.read_bits(1) + 1
-    let is_first_8bits = br.read_bits(1)
-    let symbol0 = br.read_bits(1 + 7 * is_first_8bits)
-    lengths[symbol0] = 1
-    if num_symbols == 2 {
-      let symbol1 = br.read_bits(8)
-      lengths[symbol1] = 1
-    }
-    return webp_test_prefix_code_from_lengths(lengths)
-  }
-
-  let code_length_code_lengths = FixedArray::make(19, 0)
-  let num_code_lengths = 4 + br.read_bits(4)
-  for i in 0..<num_code_lengths {
-    code_length_code_lengths[webp_test_code_length_code_order[i]] = br.read_bits(
-      3,
-    )
-  }
-  let code_length_prefix = webp_test_prefix_code_from_lengths(
-    code_length_code_lengths,
-  )
-  let use_default_max_symbol = br.read_bits(1) == 0
-  let max_symbol = if use_default_max_symbol {
-    alphabet_size
-  } else {
-    let length_nbits = 2 + 2 * br.read_bits(3)
-    2 + br.read_bits(length_nbits)
-  }
-  for i in 0..<max_symbol {
-    let token = decode_webp_symbol_for_test(br, code_length_prefix)
-    assert_true(token <= 15)
-    lengths[i] = token
-  }
-  webp_test_prefix_code_from_lengths(lengths)
-}
-
-///|
-fn decode_webp_for_test_impl(
-  data : Bytes,
-) -> (@image.ImageData, Bool, Int32) raise {
-  assert_true(data.length() >= 21)
-  assert_eq(data[0].to_int(), 0x52)
-  assert_eq(data[1].to_int(), 0x49)
-  assert_eq(data[2].to_int(), 0x46)
-  assert_eq(data[3].to_int(), 0x46)
-  let file_size = read_u32le_at_for_webp_test(data, 4)
-  assert_eq(file_size, data.length() - 8)
-  assert_eq(data[8].to_int(), 0x57)
-  assert_eq(data[9].to_int(), 0x45)
-  assert_eq(data[10].to_int(), 0x42)
-  assert_eq(data[11].to_int(), 0x50)
-  assert_eq(data[12].to_int(), 0x56)
-  assert_eq(data[13].to_int(), 0x50)
-  assert_eq(data[14].to_int(), 0x38)
-  assert_eq(data[15].to_int(), 0x4C)
-  let chunk_size = read_u32le_at_for_webp_test(data, 16)
-  let payload_start = 20
-  let payload_end = payload_start + chunk_size
-  assert_true(payload_end <= data.length())
-
-  let br = WebPTestBitReader::new(data, payload_start)
-  assert_eq(br.read_bits(8), 0x2F)
-  let width = br.read_bits(14) + 1
-  let height = br.read_bits(14) + 1
-  ignore(br.read_bits(1))
-  assert_eq(br.read_bits(3), 0)
-  let mut subtract_green = false
-  while br.read_bits(1) == 1 {
-    let transform_type = br.read_bits(2)
-    match transform_type {
-      2 => subtract_green = true
-      _ => panic()
-    }
-  }
-  let color_cache_bits = if br.read_bits(1) == 1 { br.read_bits(4) } else { 0 }
-  assert_eq(br.read_bits(1), 0) // single prefix group
-
-  let green_alphabet_size = 256 +
-    24 +
-    (if color_cache_bits > 0 { 1 << color_cache_bits } else { 0 })
-  let green_prefix = decode_prefix_code_for_webp_test(br, green_alphabet_size)
-  let red_prefix = decode_prefix_code_for_webp_test(br, 256)
-  let blue_prefix = decode_prefix_code_for_webp_test(br, 256)
-  let alpha_prefix = decode_prefix_code_for_webp_test(br, 256)
-  ignore(decode_prefix_code_for_webp_test(br, 40))
-
-  let rgba = FixedArray::make(width * height * 4, b'\x00')
-  let color_cache = FixedArray::make(
-    if color_cache_bits > 0 {
-      1 << color_cache_bits
-    } else {
-      0
-    },
-    0,
-  )
-  let color_cache_valid = FixedArray::make(
-    if color_cache_bits > 0 {
-      1 << color_cache_bits
-    } else {
-      0
-    },
-    0,
-  )
-  for i in 0..<(width * height) {
-    let green_or_op = decode_webp_symbol_for_test(br, green_prefix)
-    let offset = i * 4
-    let encoded_pixel = if green_or_op < 256 {
-      let green = green_or_op
-      let enc_red = decode_webp_symbol_for_test(br, red_prefix)
-      let enc_blue = decode_webp_symbol_for_test(br, blue_prefix)
-      let alpha = decode_webp_symbol_for_test(br, alpha_prefix)
-      (enc_red, green, enc_blue, alpha)
-    } else if green_or_op >= 280 && color_cache_bits > 0 {
-      let cache_idx = green_or_op - 280
-      assert_eq(color_cache_valid[cache_idx], 1)
-      let color = color_cache[cache_idx]
-      let alpha = (color >> 24) & 0xFF
-      let red = (color >> 16) & 0xFF
-      let green = (color >> 8) & 0xFF
-      let blue = color & 0xFF
-      (red, green, blue, alpha)
-    } else {
-      panic()
-    }
-    let enc_red = encoded_pixel.0
-    let green = encoded_pixel.1
-    let enc_blue = encoded_pixel.2
-    let alpha = encoded_pixel.3
-    let red = if subtract_green { (enc_red + green) & 0xFF } else { enc_red }
-    let blue = if subtract_green { (enc_blue + green) & 0xFF } else { enc_blue }
-    rgba[offset] = red.to_byte()
-    rgba[offset + 1] = green.to_byte()
-    rgba[offset + 2] = blue.to_byte()
-    rgba[offset + 3] = alpha.to_byte()
-    if color_cache_bits > 0 {
-      let color = webp_pack_argb_for_test(enc_red, green, enc_blue, alpha)
-      let cache_idx = webp_color_cache_index_for_test(color, color_cache_bits)
-      color_cache[cache_idx] = color
-      color_cache_valid[cache_idx] = 1
-    }
-  }
-  assert_true(br.pos <= payload_end)
-  if chunk_size % 2 == 1 {
-    assert_eq(data[payload_end].to_int(), 0)
-  }
-  (
-    { width, height, data: Bytes::from_array(rgba), },
-    subtract_green,
-    color_cache_bits,
-  )
-}
-
-///|
-fn decode_webp_for_test(data : Bytes) -> @image.ImageData raise {
-  let (image, _, _) = decode_webp_for_test_impl(data)
-  image
-}
-
-///|
 fn make_webp_test_image() -> @image.ImageData {
   let width = 3
   let height = 2
@@ -410,37 +94,78 @@ test "webp_encode basic signature" {
 }
 
 ///|
-test "webp_encode restricted roundtrip" {
-  let original = make_webp_test_image()
-  let webp = @image.encode_webp(original)
-  let decoded = decode_webp_for_test(webp)
-  assert_eq(decoded, original)
+fn webp_enc_roundtrip(img : @image.ImageData) -> Bytes raise {
+  let webp = @image.encode_webp(img)
+  let back = @image.decode_webp(webp)
+  assert_eq(back.width, img.width)
+  assert_eq(back.height, img.height)
+  assert_eq(back.data, img.data)
+  webp
 }
 
 ///|
-test "webp_encode optimizes solid image size" {
-  let img = make_webp_solid_image(16, 16, 0x80, 0x80, 0x80, 0xFF)
-  let webp = @image.encode_webp(img)
-  assert_true(webp.length() < 128)
+/// Pseudo-random RGBA image: `colors` > 0 draws from a palette of that
+/// many colors, otherwise a noisy gradient.
+fn webp_enc_image(
+  w : Int32,
+  h : Int32,
+  seed : Int32,
+  colors : Int32,
+) -> @image.ImageData {
+  let px = FixedArray::make(w * h * 4, b'\x00')
+  let mut s = seed
+  for y in 0..<h {
+    for x in 0..<w {
+      s = (s * 1103515245 + 12345) & 0x7FFFFFFF
+      let o = (y * w + x) * 4
+      if colors > 0 {
+        let c = (x / 3 + y / 2 + (s >> 20) % 2) % colors
+        px[o] = (c * 53).to_byte()
+        px[o + 1] = (c * 97 + 13).to_byte()
+        px[o + 2] = (c * 31).to_byte()
+        px[o + 3] = (if c % 3 == 0 { 255 } else { c * 40 }).to_byte()
+      } else {
+        let n = (s >> 16) % 9
+        px[o] = (x * 4 + n).to_byte()
+        px[o + 1] = (y * 3 + x + n).to_byte()
+        px[o + 2] = (x * y / 8 + n).to_byte()
+        px[o + 3] = (if (x + y) % 17 == 0 { 0 } else { 255 - y }).to_byte()
+      }
+    }
+  }
+  { width: w, height: h, data: Bytes::from_array(px), }
 }
 
 ///|
-test "webp_encode uses subtract-green transform when beneficial" {
-  let img = make_webp_subtract_green_test_image()
-  let webp = @image.encode_webp(img)
-  let (decoded, uses_subtract_green, _) = decode_webp_for_test_impl(webp)
-  assert_true(uses_subtract_green)
-  assert_eq(decoded, img)
+test "webp_encode round trips (palettes, gradients, alpha, odd sizes)" {
+  ignore(webp_enc_roundtrip(make_webp_test_image()))
+  ignore(webp_enc_roundtrip(make_webp_subtract_green_test_image()))
+  ignore(webp_enc_roundtrip(make_webp_color_cache_test_image()))
+  for colors in [1, 2, 3, 4, 5, 16, 17, 200, 256, 0] {
+    for size in [(1, 1), (7, 3), (33, 17), (64, 64)] {
+      ignore(
+        webp_enc_roundtrip(
+          webp_enc_image(size.0, size.1, colors + size.0, colors),
+        ),
+      )
+    }
+  }
+  // > 256 colors and long LZ77 runs.
+  ignore(webp_enc_roundtrip(webp_enc_image(300, 40, 7, 0)))
+  ignore(webp_enc_roundtrip(make_webp_solid_image(200, 100, 1, 2, 3, 4)))
 }
 
 ///|
-test "webp_encode uses color cache when beneficial" {
-  let img = make_webp_color_cache_test_image()
-  let webp = @image.encode_webp(img)
-  let (decoded, _, color_cache_bits) = decode_webp_for_test_impl(webp)
-  assert_true(color_cache_bits > 0)
-  assert_true(webp.length() < 512)
-  assert_eq(decoded, img)
+test "webp_encode compresses repetitive images well" {
+  let solid = make_webp_solid_image(16, 16, 0x80, 0x80, 0x80, 0xFF)
+  assert_true(webp_enc_roundtrip(solid).length() < 64)
+  // 4-color 32x32 checker: palette + LZ77.
+  assert_true(
+    webp_enc_roundtrip(make_webp_color_cache_test_image()).length() < 100,
+  )
+  // A large solid image is a handful of LZ77 copies.
+  let big = make_webp_solid_image(1000, 1000, 9, 8, 7, 255)
+  assert_true(webp_enc_roundtrip(big).length() < 200)
 }
 
 ///|
@@ -450,9 +175,7 @@ test "webp_encode preserves transparent rgb" {
     height: 1,
     data: b"\x10\x20\x30\x00\xAA\xBB\xCC\xFF",
   }
-  let webp = @image.encode_webp(img)
-  let decoded = decode_webp_for_test(webp)
-  assert_eq(decoded, img)
+  ignore(webp_enc_roundtrip(img))
 }
 
 ///|
