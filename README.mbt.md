@@ -6,7 +6,7 @@ Image codec primitives for MoonBit. Core codecs have no external dependencies ex
 
 - **PNG** decode (all color types and bit depths, `tRNS` transparency, Adam7 interlace) / encode (RGBA8, adaptive row filtering)
 - **BMP** decode (1/2/4/8-bit palette, RLE4/RLE8, 16/24/32-bit, bit fields) / encode
-- **JPEG** baseline / extended sequential / progressive decode with restart markers / baseline encode
+- **JPEG** baseline / extended sequential / progressive decode with restart markers / baseline encode (4:4:4 / 4:2:2 / 4:2:0); both match libjpeg exactly
 - **GIF** decode (static and animated, frame compositing) / encode (single-frame, indexed palette, binary transparency)
 - **WebP** lossless encode (still image)
 - **ICO** decode (PNG / BMP payloads, AND mask) / encode (single-image, PNG payload)
@@ -32,8 +32,9 @@ let img = @image.decode_png(png_bytes)
 let resized = @image.resize(img, 128, 128, Bilinear)
 let out = @image.encode_png(resized)
 
-// JPEG encode (quality defaults to 85)
+// JPEG encode (quality defaults to 85, subsampling to Yuv444)
 let jpg = @image.encode_jpeg(resized)
+let small = @image.encode_jpeg(resized, quality=75, subsampling=Yuv420)
 
 // GIF encode (<= 256 colors, alpha 0/255 only)
 let gif = @image.encode_gif(resized)
@@ -81,7 +82,7 @@ pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
 pub fn decode_ico(Bytes) -> ImageData raise DecodeError
 pub fn decode_ico_all(Bytes) -> Array[ImageData] raise DecodeError
 pub fn decode_image(Bytes) -> ImageData raise DecodeError
-pub fn encode_jpeg(ImageData, quality? : Int = 85) -> Bytes raise EncodeError
+pub fn encode_jpeg(ImageData, quality? : Int = 85, subsampling? : JpegSubsampling = Yuv444) -> Bytes raise EncodeError
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
@@ -94,6 +95,7 @@ pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
 ```
 pub(all) struct ImageData { width : Int; height : Int; data : Bytes }
 pub(all) enum ResizeMethod { Nearest; Bilinear; Bicubic }
+pub(all) enum JpegSubsampling { Yuv444; Yuv422; Yuv420 }
 pub(all) struct GifFrame { image : ImageData; delay_ms : Int }
 pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFrame]; loop_count : Int? }
 ```
@@ -104,7 +106,7 @@ pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFram
 |---|---|---|---|---|
 | PNG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: grayscale / RGB / indexed / alpha at 1-16 bit, `tRNS`, Adam7; RGBA8 normalize, stream decode |
 | BMP | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: 1/2/4/8/16/24/32-bit, RLE4/RLE8, bit fields, V2-V5 / OS/2 headers; encode: 32-bit BGRA |
-| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan; output identical to libjpeg |
+| JPEG | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: baseline / extended sequential / progressive (8-bit, Huffman), restart markers, multi-scan; output identical to libjpeg. encode: baseline, 4:4:4 / 4:2:2 / 4:2:0, entropy data identical to libjpeg |
 | GIF | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: GIF87a/89a, interlace, transparency, animation (disposal 1-3, delays, loop count); encode: single-frame, `<=256` colors, alpha `0/255` only |
 | WebP | no | yes | `js` / `native` / `wasm` / `wasm-gc` | lossless still-image encoder |
 | ICO | yes | yes | `js` / `native` / `wasm` / `wasm-gc` | decode: ICO/CUR, PNG or BMP payloads with AND mask; encode: single PNG payload, `<=256x256` |

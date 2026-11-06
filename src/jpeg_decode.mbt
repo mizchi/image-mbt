@@ -217,29 +217,6 @@ fn jpeg_unsupported_sof(marker : Int32) -> String? {
 }
 
 ///|
-// Pre-computed IDCT cosine table: cos((2*n+1)*k*PI/16) for n,k in 0..7
-// idct_cos_table[n * 8 + k] = cos((2*n+1)*k*PI/16)
-let idct_cos_table : FixedArray[Double] = {
-  let t = FixedArray::make(64, 0.0)
-  for n in 0..<8 {
-    for k in 0..<8 {
-      t[n * 8 + k] = @math.cos(
-        (2.0 * n.to_double() + 1.0) * k.to_double() * @math.PI / 16.0,
-      )
-    }
-  }
-  t
-}
-
-///|
-// C(k) scaling factor: 1/sqrt(2) for k=0, 1.0 otherwise
-let idct_c : FixedArray[Double] = {
-  let c = FixedArray::make(8, 1.0)
-  c[0] = 1.0 / 2.0.sqrt()
-  c
-}
-
-///|
 priv struct JpegComponent {
   id : Int32
   h_sample : Int32

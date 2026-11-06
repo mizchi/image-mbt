@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0
+
+- `encode_jpeg` follows libjpeg's compression pipeline: fixed-point
+  RGB -> YCbCr, libjpeg's chroma downsampling, the islow integer FDCT with
+  libjpeg's rounding quantization, edge "dummy" blocks, and deferred ZRL
+  (trailing zero runs are a single EOB). For the same quality and
+  subsampling, the entropy-coded data is byte-identical to libjpeg's
+  (Pillow with `optimize=False`)
+- New `subsampling~ : JpegSubsampling` option (`Yuv444` default, `Yuv422`,
+  `Yuv420`)
+- JPEG encode is 1.4-2.6x faster (256x256: native 5.9 -> 2.3 ms, js
+  11.7 -> 8.1 ms, wasm 8.2 -> 5.6 ms with a new i32x4 SIMD FDCT); the
+  Double DCT code is removed
+
 ## 0.8.0
 
 - JPEG decode output is now identical to libjpeg / libjpeg-turbo (e.g.

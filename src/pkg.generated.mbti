@@ -36,7 +36,7 @@ pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 
 pub fn encode_ico(ImageData) -> Bytes raise EncodeError
 
-pub fn encode_jpeg(ImageData, quality? : Int32) -> Bytes raise EncodeError
+pub fn encode_jpeg(ImageData, quality? : Int32, subsampling? : JpegSubsampling) -> Bytes raise EncodeError
 
 pub fn encode_png(ImageData) -> Bytes raise EncodeError
 
@@ -127,6 +127,12 @@ pub fn ImageFormat::equal(Self, Self) -> Bool
 pub fn ImageFormat::output(Self, &Logger) -> Unit
 pub fn ImageFormat::to_string(Self) -> String
 pub impl Show for ImageFormat
+
+pub(all) enum JpegSubsampling {
+  Yuv444
+  Yuv422
+  Yuv420
+}
 
 #derive(Eq)
 pub(all) enum ResizeMethod {
