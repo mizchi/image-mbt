@@ -46,7 +46,8 @@ fn exif_payload(data : Bytes) -> Bytes {
 }
 
 ///|
-/// The EXIF orientation (1-8) of a JPEG, PNG or TIFF file, if it has one.
+/// The EXIF orientation (1-8) of a JPEG, PNG, TIFF or WebP file, if it has
+/// one.
 /// Malformed metadata is treated as absent.
 pub fn read_exif_orientation(raw : Bytes) -> Int32? {
   if is_jpeg_signature(raw) {
@@ -88,6 +89,22 @@ pub fn read_exif_orientation(raw : Bytes) -> Int32? {
     None
   } else if tiff_signature_ok(raw) {
     exif_tiff_orientation(raw)
+  } else if webp_signature_ok(raw) {
+    // Extended WebP files keep EXIF in an "EXIF" chunk (TIFF data,
+    // sometimes still behind the JPEG-style "Exif\0\0" prefix).
+    let size = webp_le32(raw, 4)
+    if size < 4 || size > raw.length() - 8 {
+      return None
+    }
+    let chunks = webp_chunks(raw, 12, 8 + size) catch { _ => return None }
+    for c in chunks {
+      if c.tag == "EXIF" {
+        return exif_tiff_orientation(
+          exif_payload(raw[c.start:c.end].to_owned()),
+        )
+      }
+    }
+    None
   } else {
     None
   }

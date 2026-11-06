@@ -159,3 +159,69 @@ test "robustness: PNG decompression bomb is rejected before inflating" {
   let r = Ok(@image.decode_png(png)) catch { e => Err(e) }
   assert_true(r is Err(@image.CorruptData(_)))
 }
+
+///|
+fn robustness_webp(chunk_tag : Bytes, payload : Bytes) -> Bytes {
+  let pad = if (payload.length() & 1) == 1 { b"\x00" } else { b"" }
+  let le32 = fn(v : Int32) -> Bytes {
+    Bytes::from_array([
+      v.to_byte(),
+      (v >> 8).to_byte(),
+      (v >> 16).to_byte(),
+      (v >> 24).to_byte(),
+    ])
+  }
+  let body = b"WEBP" + chunk_tag + le32(payload.length()) + payload + pad
+  b"RIFF" + le32(body.length()) + body
+}
+
+///|
+test "robustness: WebP truncated at every length" {
+  let img : @image.ImageData = {
+    width: 5,
+    height: 4,
+    data: Bytes::make(5 * 4 * 4, b'\x99'),
+  }
+  let webp = @image.encode_webp(img)
+  for n in 0..<webp.length() {
+    expect_decode_error("prefix " + n.to_string(), fn() raise @image.DecodeError {
+      ignore(@image.decode_webp(webp[0:n].to_owned()))
+    })
+  }
+  // RIFF size larger than the file.
+  let bad = webp.to_fixedarray()
+  bad[4] = b'\xFF'
+  bad[5] = b'\xFF'
+  expect_decode_error("riff size", fn() raise @image.DecodeError {
+    ignore(@image.decode_webp(Bytes::from_array(bad)))
+  })
+}
+
+///|
+test "robustness: WebP huge dimensions" {
+  // VP8L header claiming 16384 x 16384.
+  let vp8l = robustness_webp(b"VP8L", b"\x2F\xFF\xFF\xFF\x0F\x00\x00\x00")
+  let r = Ok(@image.decode_webp(vp8l)) catch { e => Err(e) }
+  assert_true(r is Err(@image.UnsupportedFeature(_)))
+  // VP8 key frame header claiming 16383 x 16383.
+  let vp8 = robustness_webp(
+    b"VP8 ", b"\x10\x00\x00\x9D\x01\x2A\xFF\x3F\xFF\x3F\x00\x00\x00\x00",
+  )
+  let r2 = Ok(@image.decode_webp(vp8)) catch { e => Err(e) }
+  assert_true(r2 is Err(@image.UnsupportedFeature(_)))
+  // VP8X canvas of 2^24 x 2^24.
+  let vp8x = robustness_webp(
+    b"VP8X", b"\x00\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF",
+  )
+  let r3 = Ok(@image.decode_webp(vp8x)) catch { e => Err(e) }
+  assert_true(r3 is Err(@image.UnsupportedFeature(_)))
+}
+
+///|
+test "robustness: WebP lossless stream with garbage after the header" {
+  // 4 x 4 image whose entropy data is random bits: must fail cleanly.
+  let payload = b"\x2F\x03\xC0\x00\x00" + Bytes::make(64, b'\xA5')
+  expect_decode_error("garbage", fn() raise @image.DecodeError {
+    ignore(@image.decode_webp(robustness_webp(b"VP8L", payload)))
+  })
+}

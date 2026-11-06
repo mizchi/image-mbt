@@ -36,6 +36,10 @@ pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData ra
 
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
 
+pub fn decode_webp(Bytes) -> ImageData raise DecodeError
+
+pub fn decode_webp_frames(Bytes) -> Animation raise DecodeError
+
 pub fn detect_image_format(Bytes) -> ImageFormat?
 
 pub fn encode_apng(Animation) -> Bytes raise EncodeError
@@ -142,6 +146,7 @@ pub(all) enum ImageFormat {
   Gif
   Ico
   Tiff
+  WebP
 }
 pub fn ImageFormat::equal(Self, Self) -> Bool
 pub fn ImageFormat::output(Self, &Logger) -> Unit

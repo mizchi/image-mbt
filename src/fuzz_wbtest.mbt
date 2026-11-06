@@ -109,6 +109,9 @@ fn fuzz_decode_all(data : Bytes) -> Unit {
   sink(decode_tiff(data).width) catch {
     _ => ()
   }
+  sink(decode_webp_frames(data).frames.length()) catch {
+    _ => ()
+  }
   sink(decode_png_frames(data).frames.length()) catch {
     _ => ()
   }
