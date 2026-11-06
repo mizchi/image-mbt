@@ -101,6 +101,7 @@ test "detect_image_format and decode_image_stream for every format" {
     (@image.encode_gif(img), @image.Gif),
     (@image.encode_ico(img), @image.Ico),
     (@image.encode_webp(img), @image.WebP),
+    (@image.encode_tiff(img), @image.Tiff),
   ]
   for f in files {
     let (bytes, format) = f

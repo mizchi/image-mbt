@@ -254,8 +254,7 @@ priv struct TiffImage {
 }
 
 ///|
-/// Decode the first image of a TIFF file.
-pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
+fn tiff_reader(raw : Bytes) -> TiffReader raise DecodeError {
   if raw.length() >= 4 &&
     (
       (raw[0] == b'I' && raw[2] == b'\x2B') ||
@@ -266,8 +265,43 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
   if !tiff_signature_ok(raw) {
     raise InvalidSignature("not a TIFF file")
   }
-  let r : TiffReader = { data: raw, little: raw[0] == b'I', }
-  let ifd = r.u32(4)
+  { data: raw, little: raw[0] == b'I', }
+}
+
+///|
+/// Decode the first image of a TIFF file.
+pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
+  let r = tiff_reader(raw)
+  tiff_decode_ifd(r, r.u32(4))
+}
+
+///|
+/// Decode every image (page) of a TIFF file, following the IFD chain.
+pub fn decode_tiff_pages(raw : Bytes) -> Array[ImageData] raise DecodeError {
+  let r = tiff_reader(raw)
+  let pages : Array[ImageData] = []
+  let seen : Map[Int32, Bool] = Map([])
+  let mut ifd = r.u32(4)
+  while ifd != 0 {
+    if seen.contains(ifd) {
+      raise CorruptData("TIFF IFD chain loops")
+    }
+    if pages.length() >= 1024 {
+      raise UnsupportedFeature("TIFF with more than 1024 pages")
+    }
+    seen[ifd] = true
+    pages.push(tiff_decode_ifd(r, ifd))
+    ifd = r.u32(ifd + 2 + r.u16(ifd) * 12)
+  }
+  if pages.is_empty() {
+    raise MissingChunk("TIFF image directory")
+  }
+  pages
+}
+
+///|
+fn tiff_decode_ifd(r : TiffReader, ifd : Int32) -> ImageData raise DecodeError {
+  let raw = r.data
   let n = r.u16(ifd)
   // Tag values, with defaults.
   let tags : Map[Int32, Array[Int32]] = Map([])
@@ -306,8 +340,8 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
   }
   let compression = first(259, 1)
   match compression {
-    1 | 5 | 8 | 32946 | 32773 => ()
-    7 | 6 => raise UnsupportedFeature("JPEG-compressed TIFF")
+    1 | 5 | 7 | 8 | 32946 | 32773 => ()
+    6 => raise UnsupportedFeature("old-style JPEG-compressed TIFF")
     2 | 3 | 4 => raise UnsupportedFeature("CCITT-compressed TIFF")
     c => raise UnsupportedFeature("TIFF compression " + c.to_string())
   }
@@ -315,6 +349,8 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
   let base_channels = match photometric {
     0 | 1 | 3 => 1
     2 => 3
+    // YCbCr is only supported inside JPEG strips (converted to RGB there).
+    6 if compression == 7 => 3
     5 => 4
     p => raise UnsupportedFeature("TIFF photometric " + p.to_string())
   }
@@ -338,13 +374,28 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
     raise CorruptData("TIFF palette image without a complete ColorMap")
   }
   let planar = first(284, 1) == 2 && spp > 1
+  if compression == 7 && (bps != 8 || planar || predictor != 1) {
+    raise UnsupportedFeature("JPEG TIFF other than 8-bit chunky")
+  }
+  let jpeg_tables = match tags.get(347) {
+    Some(t) if t.length() >= 4 =>
+      // Shared DQT / DHT segments: SOI ... EOI (EOI is dropped).
+      Bytes::from_array(
+        FixedArray::makei(t.length() - 2, fn(i) { t[i].to_byte() }),
+      )
+    _ => b""
+  }
   let img : TiffImage = {
     width,
     height,
     bps,
     spp,
     planar,
-    photometric,
+    photometric: if photometric == 6 {
+      2
+    } else {
+      photometric
+    },
     colormap,
     alpha_index,
     associated_alpha,
@@ -409,6 +460,8 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
       let data = match compression {
         1 => src
         5 => tiff_lzw_decode(src, expected)
+        7 =>
+          tiff_jpeg_chunk(jpeg_tables, src, cw, ch, plane_spp, photometric == 6)
         8 | 32946 =>
           // Bounded by the chunk size (decompression bombs).
           @zlib.zlib_decompress(src, max_size=expected) catch {
@@ -452,6 +505,53 @@ pub fn decode_tiff(raw : Bytes) -> ImageData raise DecodeError {
     }
   }
   tiff_to_rgba(img, planes, row_bytes, r.little)
+}
+
+///|
+/// Decode one JPEG strip / tile into interleaved 8-bit samples of a
+/// `cw` x `ch` chunk. Like libtiff, the samples are the raw JPEG components
+/// unless the photometric is YCbCr, which is converted to RGB.
+fn tiff_jpeg_chunk(
+  tables : Bytes,
+  src : Bytes,
+  cw : Int32,
+  ch : Int32,
+  spp : Int32,
+  ycbcr : Bool,
+) -> Bytes raise DecodeError {
+  let jpg = if tables.length() > 0 && src.length() >= 2 {
+    tables + src[2:].to_owned()
+  } else {
+    src
+  }
+  let (jw, jh, planes, _) = jpeg_decode_planes(jpg)
+  if planes.length() != spp {
+    raise CorruptData("TIFF JPEG component count differs from SamplesPerPixel")
+  }
+  let out = FixedArray::make(cw * ch * spp, b'\x00')
+  let t = jpeg_ycc_tables
+  for y in 0..<tiff_min(ch, jh) {
+    for x in 0..<tiff_min(cw, jw) {
+      let i = y * jw + x
+      let o = (y * cw + x) * spp
+      if ycbcr {
+        let yy = planes[0][i]
+        let cb = planes[1][i]
+        let cr = planes[2][i]
+        out[o] = clamp_byte(yy + t.cr_r[cr])
+        out[o + 1] = clamp_byte(yy + ((t.cb_g[cb] + t.cr_g[cr]) >> 16))
+        out[o + 2] = clamp_byte(yy + t.cb_b[cb])
+        for s in 3..<spp {
+          out[o + s] = planes[s][i].to_byte()
+        }
+      } else {
+        for s in 0..<spp {
+          out[o + s] = planes[s][i].to_byte()
+        }
+      }
+    }
+  }
+  Bytes::from_array(out)
 }
 
 ///|

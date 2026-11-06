@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.0
+
+- TIFF: `decode_tiff_pages` (every image in the IFD chain), JPEG-compressed
+  TIFF (compression 7 with `JPEGTables`; RGB / YCbCr / gray / CMYK), and
+  `encode_tiff` (RGB or RGBA, None / LZW / Deflate / PackBits, horizontal
+  predictor for LZW and Deflate)
+
 ## 0.14.0
 
 - `encode_webp_animation`: animated WebP from an `Animation` (lossless
