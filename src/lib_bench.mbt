@@ -109,6 +109,12 @@ test "bench: WebP encode cache-friendly 64x64" (b : @bench.T) {
 }
 
 ///|
+test "bench: WebP lossy encode 64x64" (b : @bench.T) {
+  let img = make_bench_image()
+  b.bench(fn() { b.keep(encode_webp_lossy(img)) catch { _ => () } })
+}
+
+///|
 test "bench: WebP lossless decode 64x64" (b : @bench.T) {
   let webp = encode_webp(make_bench_image()) catch { _ => panic() }
   b.bench(fn() { b.keep(decode_webp(webp)) catch { _ => () } })

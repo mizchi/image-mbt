@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.0
+
+- `encode_webp_lossy(img, quality~ : Int = 75)`: lossy WebP (VP8 key frame)
+  with per-macroblock 16x16 / 4x4 intra mode decisions, adaptive token
+  probabilities, skip flags and the normal loop filter; alpha goes into a
+  lossless ALPH chunk
+- VP8L encoder: predictor candidates without subtract-green (smaller
+  single-channel images such as alpha planes)
+
 ## 0.15.0
 
 - TIFF: `decode_tiff_pages` (every image in the IFD chain), JPEG-compressed
