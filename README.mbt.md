@@ -74,7 +74,7 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 ### Details
 
 - **PNG** decode: grayscale / RGB / palette / gray+alpha / RGBA at 1, 2, 4, 8 and 16 bits (16-bit uses the high byte), `tRNS` transparency, Adam7 interlace. **APNG** (`decode_png_frames`): `fcTL` / `fdAT`, dispose none / background / previous, blend source / over; `decode_png` returns the default image. Encode: RGBA8 by default, or RGB / gray / gray+alpha / palette (1-8 bit, `tRNS`) / `Auto`, with adaptive row filtering and four compression levels. `encode_apng` writes APNG from an `Animation`, cropping each frame to the changed region.
-- **JPEG** decode: baseline, extended sequential and progressive (8-bit, Huffman), any sampling factors, multiple scans, restart markers; grayscale, YCbCr, RGB, CMYK and YCCK (the color space is inferred from the JFIF / Adobe markers and component IDs like libjpeg-turbo; CMYK uses the Adobe inverted convention and is converted to RGB like Pillow, without ICC). Output is identical to libjpeg / libjpeg-turbo (islow IDCT, fancy upsampling, fixed-point color conversion). Encode: baseline with 4:4:4 / 4:2:2 / 4:2:0; the entropy-coded data is identical to libjpeg's for the same quality and subsampling (standard Huffman tables).
+- **JPEG** decode: baseline, extended sequential and progressive (8-bit, Huffman), any sampling factors, multiple scans, restart markers; grayscale, YCbCr, RGB, CMYK and YCCK (the color space is inferred from the JFIF / Adobe markers and component IDs like libjpeg-turbo; CMYK uses the Adobe inverted convention and is converted to RGB like Pillow, without ICC). Output is identical to libjpeg / libjpeg-turbo (islow IDCT, fancy upsampling, fixed-point color conversion). Encode: baseline with 4:4:4 / 4:2:2 / 4:2:0, standard or `optimize=true` (per-image) Huffman tables; the tables and entropy-coded data are identical to libjpeg's for the same quality, subsampling and `optimize` setting.
 - **GIF** decode: GIF87a / 89a, global and local color tables, interlace, transparency, animation with disposal 1-3, delays and the NETSCAPE loop count (frames are composited onto a transparent canvas, like browsers). Encode: LZW-compressed; `encode_gif` for one image and `encode_gif_animation` for an `Animation` (global or local palettes, changed-region cropping). At most 256 colors per frame, alpha 0 or 255.
 - **BMP** decode: 1 / 2 / 4 / 8-bit palette, RLE4 / RLE8, 16 / 24 / 32-bit, `BI_BITFIELDS` / `BI_ALPHABITFIELDS`, V2-V5 and OS/2 headers. Encode: 32-bit BGRA.
 - **ICO / CUR** decode: PNG or BMP (DIB) payloads with the AND mask; `decode_ico` returns the largest image, `decode_ico_all` every image. Encode: one image up to 256x256 with a PNG payload.
@@ -117,7 +117,7 @@ pub fn encode_apng(Animation) -> Bytes raise EncodeError
 
 // JPEG
 pub fn decode_jpeg(Bytes) -> ImageData raise DecodeError
-pub fn encode_jpeg(ImageData, quality? : Int = 85, subsampling? : JpegSubsampling = Yuv444) -> Bytes raise EncodeError
+pub fn encode_jpeg(ImageData, quality? : Int = 85, subsampling? : JpegSubsampling = Yuv444, optimize? : Bool = false) -> Bytes raise EncodeError
 
 // GIF
 pub fn decode_gif(Bytes) -> ImageData raise DecodeError

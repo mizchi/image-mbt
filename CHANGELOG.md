@@ -6,6 +6,9 @@
   frames cropped to the changed region; delays in ms, loop count = `plays`)
 - JPEG decode: CMYK, YCCK and RGB (Adobe transform 0 / component IDs)
   files; color space inferred like libjpeg-turbo, CMYK -> RGB like Pillow
+- `encode_jpeg(optimize~)`: per-image optimal Huffman tables (two passes),
+  identical to libjpeg's optimize_coding; DHT segments are written in
+  libjpeg's order (DC0, AC0, DC1, AC1)
 - WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
 - CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
 
