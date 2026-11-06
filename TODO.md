@@ -15,7 +15,7 @@
 - [x] Resize (Nearest / fixed-point Bilinear / Bicubic)
 - [x] Format auto-detect (`decode_image`), stream decode (PNG / BMP)
 - [x] Mutation fuzz test; malformed input raises `DecodeError`
-- [x] wasm SIMD fast paths
+- [x] wasm SIMD fast paths (PNG, JPEG, resize, VP8 loop filter)
 - [x] EXIF orientation (read + apply)
 - [x] Animated GIF / APNG encode; real GIF LZW
 - [x] PNG encode color modes and compression levels

@@ -98,7 +98,7 @@ Unsupported inputs raise `DecodeError::UnsupportedFeature`.
 - Decoders raise `DecodeError` on malformed input instead of panicking. This is covered by a mutation fuzz test over every format.
 - Images larger than 2^27 pixels (134M) are rejected with `UnsupportedFeature("image too large")`, and PNG / TIFF zlib data is never inflated beyond the size the header implies.
 - Decoders are tested against Pillow (libjpeg-turbo, libtiff, libpng, libwebp) fixtures. JPEG decode and encode, and WebP decode, are checked for exact equality with libjpeg / libwebp.
-- On the `wasm` (linear memory) target, hot loops use 128-bit SIMD through inline WAT: PNG filters and color expansion, JPEG IDCT / FDCT, and resize. Other targets run scalar code that gives identical output. A wasm runtime with SIMD support is required.
+- On the `wasm` (linear memory) target, hot loops use 128-bit SIMD through inline WAT: PNG filters and color expansion, JPEG IDCT / FDCT, the WebP (VP8) loop filter, and resize. Other targets run scalar code that gives identical output. A wasm runtime with SIMD support is required.
 
 ## API
 
