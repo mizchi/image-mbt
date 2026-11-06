@@ -10,7 +10,7 @@ priv struct VP8LReader {
   data : Bytes
   end : Int32
   mut pos : Int32
-  mut val : UInt64
+  mut val : UInt32 // 32-bit window (UInt64 is slow on the js target)
   mut nbits : Int32
   mut pad : Int32 // zero bits appended past the end, at the top of `val`
 }
@@ -22,9 +22,10 @@ fn VP8LReader::new(data : Bytes, start : Int32, end : Int32) -> VP8LReader {
 
 ///|
 fn VP8LReader::fill(self : VP8LReader) -> Unit {
-  while self.nbits <= 56 {
+  // Keep 25..32 bits buffered; no VP8L read is longer than 18 bits.
+  while self.nbits <= 24 {
     if self.pos < self.end {
-      self.val = self.val | (self.data[self.pos].to_uint64() << self.nbits)
+      self.val = self.val | (self.data[self.pos].to_uint() << self.nbits)
       self.pos += 1
     } else {
       self.pad += 8
@@ -38,7 +39,7 @@ fn VP8LReader::peek(self : VP8LReader, n : Int32) -> Int32 {
   if self.nbits < n {
     self.fill()
   }
-  (self.val & ((1UL << n) - 1)).to_int()
+  (self.val & ((1U << n) - 1)).reinterpret_as_int()
 }
 
 ///|

@@ -21,10 +21,11 @@
 - [x] PNG encode color modes and compression levels
 - [x] zlib output-size limits on decode
 - [x] WebP decode (lossy, lossless, alpha, animation; libwebp-exact)
+- [x] Animated WebP encode (lossless frames)
 
 ## Next
 
-- [ ] WebP lossy encode; animated WebP encode
+- [ ] WebP lossy encode
 - [ ] TIFF: more pages, JPEG-in-TIFF; TIFF encode
 - [ ] JPEG: CMYK / Adobe files, optimized Huffman tables on encode
 - [ ] WebP encoder optimization (transforms / LZ77 / color cache)

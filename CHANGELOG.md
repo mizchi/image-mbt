@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+- `encode_webp_animation`: animated WebP from an `Animation` (lossless
+  frames cropped to the changed region; delays in ms, loop count = `plays`)
+- WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
+- CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
+
 ## 0.13.0
 
 - WebP decode: `decode_webp` and `decode_webp_frames` (lossy VP8,

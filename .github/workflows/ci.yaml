@@ -16,7 +16,7 @@ jobs:
         target: [js, native, wasm, wasm-gc]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install MoonBit CLI
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
@@ -28,7 +28,7 @@ jobs:
       - name: Cache ffmpeg
         if: matrix.target == 'js'
         id: ffmpeg-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/ffmpeg
           key: ffmpeg-btbn-master-linux64-gpl-v2

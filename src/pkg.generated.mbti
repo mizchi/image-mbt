@@ -60,6 +60,8 @@ pub fn encode_png(ImageData, color? : PngColorMode, compression? : PngCompressio
 
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError
 
+pub fn encode_webp_animation(Animation) -> Bytes raise EncodeError
+
 pub fn package_name() -> String
 
 pub fn read_exif_orientation(Bytes) -> Int32?
