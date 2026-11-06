@@ -79,3 +79,43 @@ test "decode_image_stream invalid signature" {
     _ => fail("expected decode_image_stream to raise for invalid signature")
   }
 }
+
+///|
+test "detect_image_format and decode_image_stream for every format" {
+  let data = FixedArray::make(6 * 4 * 4, b'\x00')
+  for i in 0..<24 {
+    data[i * 4] = (i * 10).to_byte()
+    data[i * 4 + 1] = (200 - i * 5).to_byte()
+    data[i * 4 + 2] = (i * 3).to_byte()
+    data[i * 4 + 3] = b'\xFF'
+  }
+  let img : @image.ImageData = {
+    width: 6,
+    height: 4,
+    data: Bytes::from_array(data),
+  }
+  let files : Array[(Bytes, @image.ImageFormat)] = [
+    (@image.encode_png(img), @image.Png),
+    (@image.encode_bmp(img), @image.Bmp),
+    (@image.encode_jpeg(img), @image.Jpeg),
+    (@image.encode_gif(img), @image.Gif),
+    (@image.encode_ico(img), @image.Ico),
+  ]
+  for f in files {
+    let (bytes, format) = f
+    assert_eq(@image.detect_image_format(bytes), Some(format))
+    let buf = FixedArray::make(6 * 4 * 4, b'\x00')
+    let info = @image.decode_image_stream(bytes, on_row=fn(y, row) {
+      buf.blit_from_bytes(y * 24, row, 0, 24)
+    })
+    assert_eq(info.format, format)
+    assert_eq(info.width, 6)
+    assert_eq(info.height, 4)
+    assert_eq(Bytes::from_array(buf), @image.decode_image(bytes).data)
+  }
+  assert_eq(
+    @image.detect_image_format(b"II\x2A\x00\x08\x00\x00\x00"),
+    Some(@image.Tiff),
+  )
+  assert_eq(@image.detect_image_format(b"nope"), None)
+}

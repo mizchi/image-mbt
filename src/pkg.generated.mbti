@@ -14,7 +14,7 @@ pub fn decode_bmp_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> (Int32, Int
 
 pub fn decode_gif(Bytes) -> ImageData raise DecodeError
 
-pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
+pub fn decode_gif_frames(Bytes) -> Animation raise DecodeError
 
 pub fn decode_ico(Bytes) -> ImageData raise DecodeError
 
@@ -35,6 +35,8 @@ pub fn decode_png_frames(Bytes) -> Animation raise DecodeError
 pub fn decode_png_stream(Bytes, on_row~ : (Int32, Bytes) -> Unit) -> IhdrData raise DecodeError
 
 pub fn decode_tiff(Bytes) -> ImageData raise DecodeError
+
+pub fn detect_image_format(Bytes) -> ImageFormat?
 
 pub fn encode_apng(Animation) -> Bytes raise EncodeError
 
@@ -106,18 +108,6 @@ pub fn ColorType::output(Self, &Logger) -> Unit
 pub fn ColorType::to_string(Self) -> String
 pub impl Show for ColorType
 
-pub(all) struct GifAnimation {
-  width : Int32
-  height : Int32
-  frames : Array[GifFrame]
-  loop_count : Int32?
-}
-
-pub(all) struct GifFrame {
-  image : ImageData
-  delay_ms : Int32
-}
-
 #derive(Eq)
 pub(all) struct IhdrData {
   width : Int32
@@ -148,6 +138,10 @@ pub impl Show for ImageData
 pub(all) enum ImageFormat {
   Png
   Bmp
+  Jpeg
+  Gif
+  Ico
+  Tiff
 }
 pub fn ImageFormat::equal(Self, Self) -> Bool
 pub fn ImageFormat::output(Self, &Logger) -> Unit

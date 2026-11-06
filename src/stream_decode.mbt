@@ -17,19 +17,54 @@ fn is_bmp_signature(raw : Bytes) -> Bool {
 }
 
 ///|
+/// The format of an image, detected from its signature.
+pub fn detect_image_format(raw : Bytes) -> ImageFormat? {
+  if is_png_signature(raw) {
+    Some(Png)
+  } else if is_jpeg_signature(raw) {
+    Some(Jpeg)
+  } else if gif_signature_ok(raw) {
+    Some(Gif)
+  } else if is_bmp_signature(raw) {
+    Some(Bmp)
+  } else if is_ico_signature(raw) {
+    Some(Ico)
+  } else if tiff_signature_ok(raw) {
+    Some(Tiff)
+  } else {
+    None
+  }
+}
+
+///|
+/// Decode any supported image row by row (`on_row(y, rgba_row)`). PNG and
+/// BMP are streamed; other formats are decoded fully, then emitted by row.
 pub fn decode_image_stream(
   raw : Bytes,
   on_row~ : (Int32, Bytes) -> Unit,
 ) -> StreamImageInfo raise DecodeError {
-  if is_png_signature(raw) {
-    let ihdr = decode_png_stream(raw, on_row~)
-    return { format: Png, width: ihdr.width, height: ihdr.height, }
+  let format = match detect_image_format(raw) {
+    Some(f) => f
+    None => raise InvalidSignature("unknown image format")
   }
-  if is_bmp_signature(raw) {
-    let (width, height) = decode_bmp_stream(raw, on_row~)
-    return { format: Bmp, width, height, }
+  match format {
+    Png => {
+      let ihdr = decode_png_stream(raw, on_row~)
+      { format, width: ihdr.width, height: ihdr.height, }
+    }
+    Bmp => {
+      let (width, height) = decode_bmp_stream(raw, on_row~)
+      { format, width, height, }
+    }
+    _ => {
+      let img = decode_image(raw)
+      let row = img.width * 4
+      for y in 0..<img.height {
+        on_row(y, img.data[y * row:(y + 1) * row].to_owned())
+      }
+      { format, width: img.width, height: img.height, }
+    }
   }
-  raise InvalidSignature("unknown image format")
 }
 
 ///|

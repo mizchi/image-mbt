@@ -32,7 +32,7 @@
 
 ## Packaging
 
-- [ ] Unify `GifAnimation` with `Animation`
-- [ ] Add JPEG / GIF / ICO / TIFF to `ImageFormat` (breaking change)
+- [x] Unify `GifAnimation` with `Animation`
+- [x] Add JPEG / GIF / ICO / TIFF to `ImageFormat`
 - [ ] Split reusable codec core from engine-specific adapters
 - [ ] Stabilize public API and add compatibility tests

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.0
+
+Breaking changes:
+
+- `decode_gif_frames` returns `Animation` (like `decode_png_frames`);
+  `GifAnimation` / `GifFrame` are removed. `loop_count` becomes `plays`:
+  no NETSCAPE loop extension = 1, loop 0 = 0 (forever), loop n = n + 1
+- `ImageFormat` gains `Jpeg`, `Gif`, `Ico` and `Tiff`
+
+Other changes:
+
+- New `detect_image_format`
+- `decode_image_stream` accepts every format (PNG and BMP are streamed,
+  others are decoded and then emitted row by row)
+
 ## 0.11.0
 
 - EXIF orientation: `read_exif_orientation` (JPEG / PNG / TIFF),

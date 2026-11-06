@@ -41,6 +41,10 @@ pub(all) struct IhdrData {
 pub(all) enum ImageFormat {
   Png
   Bmp
+  Jpeg
+  Gif
+  Ico
+  Tiff
 }
 
 ///|
@@ -110,6 +114,10 @@ pub impl Show for ImageFormat with fn output(self, logger) {
   match self {
     Png => logger.write_string("Png")
     Bmp => logger.write_string("Bmp")
+    Jpeg => logger.write_string("Jpeg")
+    Gif => logger.write_string("Gif")
+    Ico => logger.write_string("Ico")
+    Tiff => logger.write_string("Tiff")
   }
 }
 

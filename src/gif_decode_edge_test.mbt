@@ -73,5 +73,5 @@ test "gif: encode_gif roundtrip with transparency" {
   assert_eq(@image.decode_gif(gif), img)
   let anim = @image.decode_gif_frames(gif)
   assert_eq(anim.frames.length(), 1)
-  assert_eq(anim.loop_count, None)
+  assert_eq(anim.plays, 1)
 }

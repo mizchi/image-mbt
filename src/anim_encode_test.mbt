@@ -79,7 +79,7 @@ test "encode_gif_animation round-trips through decode_gif_frames" {
     let back = @image.decode_gif_frames(gif)
     assert_eq(back.width, 19)
     assert_eq(back.height, 13)
-    assert_eq(back.loop_count, Some(2)) // plays 3 = NETSCAPE loop 2
+    assert_eq(back.plays, 3) // written as NETSCAPE loop 2
     assert_eq(back.frames.length(), anim.frames.length())
     for i, f in anim.frames {
       assert_eq(back.frames[i].image, f.image)
@@ -94,11 +94,11 @@ test "encode_gif_animation loop count mapping and validation" {
   let forever = @image.decode_gif_frames(
     @image.encode_gif_animation({ ..anim, plays: 0, }),
   )
-  assert_eq(forever.loop_count, Some(0))
+  assert_eq(forever.plays, 0)
   let once = @image.decode_gif_frames(
     @image.encode_gif_animation({ ..anim, plays: 1, }),
   )
-  assert_eq(once.loop_count, None)
+  assert_eq(once.plays, 1)
   // Mismatched frame size and partial alpha are rejected.
   let bad_size : @image.Animation = {
     ..anim,

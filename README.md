@@ -46,7 +46,8 @@ let gif_anim = @image.decode_gif_frames(gif_bytes)
 let apng_out = @image.encode_apng(apng)
 let gif_out = @image.encode_gif_animation(apng)
 
-// Stream decode, row by row (PNG / BMP)
+// Detect the format, or decode row by row (PNG / BMP are streamed)
+let format = @image.detect_image_format(image_bytes)
 let rows : Array[Bytes] = []
 let info = @image.decode_image_stream(
   image_bytes,
@@ -59,16 +60,16 @@ inspect((info.format, info.width, info.height))
 
 | Format | Decode | Encode | Animation | Stream decode |
 |---|---|---|---|---|
-| PNG | yes | yes (RGBA / RGB / gray / gray+alpha / palette) | APNG decode / encode | yes |
-| JPEG | yes | yes | n/a | no |
-| GIF | yes | yes | decode / encode | no |
-| BMP | yes | yes (32-bit) | n/a | yes |
-| ICO / CUR | yes | yes (ICO, PNG payload) | n/a | no |
-| TIFF | yes (first image) | no | n/a | no |
+| PNG | yes | yes (RGBA / RGB / gray / gray+alpha / palette) | APNG decode / encode | yes (streamed) |
+| JPEG | yes | yes | n/a | yes |
+| GIF | yes | yes | decode / encode | yes |
+| BMP | yes | yes (32-bit) | n/a | yes (streamed) |
+| ICO / CUR | yes | yes (ICO, PNG payload) | n/a | yes |
+| TIFF | yes (first image) | no | n/a | yes |
 | WebP | no | yes (lossless) | no | no |
 | AVIF | no | yes (`js` only) | no | no |
 
-All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`.
+All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`. `decode_image_stream` reads rows as they are decoded for PNG and BMP; other formats are decoded first, then emitted row by row.
 
 ### Details
 
@@ -105,6 +106,7 @@ Unsupported inputs raise `DecodeError::UnsupportedFeature`.
 // Auto-detect
 pub fn decode_image(Bytes) -> ImageData raise DecodeError
 pub fn decode_image_stream(Bytes, on_row~ : (Int, Bytes) -> Unit) -> StreamImageInfo raise DecodeError
+pub fn detect_image_format(Bytes) -> ImageFormat?
 
 // PNG / APNG
 pub fn decode_png(Bytes) -> ImageData raise DecodeError
@@ -119,7 +121,7 @@ pub fn encode_jpeg(ImageData, quality? : Int = 85, subsampling? : JpegSubsamplin
 
 // GIF
 pub fn decode_gif(Bytes) -> ImageData raise DecodeError
-pub fn decode_gif_frames(Bytes) -> GifAnimation raise DecodeError
+pub fn decode_gif_frames(Bytes) -> Animation raise DecodeError
 pub fn encode_gif(ImageData) -> Bytes raise EncodeError
 pub fn encode_gif_animation(Animation) -> Bytes raise EncodeError
 
@@ -157,8 +159,7 @@ pub(all) enum PngColorMode { Rgba; Rgb; Gray; GrayAlpha; Palette; Auto }
 pub(all) enum PngCompression { Stored; Fast; Default; Best }
 pub(all) struct Animation { width : Int; height : Int; frames : Array[AnimationFrame]; plays : Int } // plays: 0 = forever
 pub(all) struct AnimationFrame { image : ImageData; delay_ms : Int }
-pub(all) struct GifAnimation { width : Int; height : Int; frames : Array[GifFrame]; loop_count : Int? }
-pub(all) struct GifFrame { image : ImageData; delay_ms : Int }
+pub(all) enum ImageFormat { Png; Bmp; Jpeg; Gif; Ico; Tiff }
 pub(all) suberror DecodeError { InvalidSignature(String); InvalidChunkCrc(String); MissingChunk(String); UnsupportedFeature(String); CorruptData(String) }
 pub(all) suberror EncodeError { InvalidDimensions(String); InvalidData(String) }
 ```
