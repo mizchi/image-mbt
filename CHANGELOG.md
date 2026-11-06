@@ -9,6 +9,10 @@
 - `encode_jpeg(optimize~)`: per-image optimal Huffman tables (two passes),
   identical to libjpeg's optimize_coding; DHT segments are written in
   libjpeg's order (DC0, AC0, DC1, AC1)
+- `encode_webp` rewritten: real length-limited Huffman codes, LZ77 with
+  2-D distance codes, color cache, subtract-green + predictor or palette
+  transforms; files are 2-15x smaller than before (within 5-30% of
+  libwebp's lossless mode)
 - WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
 - CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
 
