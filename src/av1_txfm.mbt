@@ -3,7 +3,7 @@
 // transforms are the (floating point) inverses of those matrices.
 
 ///|
-fn av1_round2(x : Int, n : Int) -> Int {
+fn av1_round2(x : Int32, n : Int32) -> Int32 {
   if n == 0 {
     x
   } else {
@@ -12,7 +12,17 @@ fn av1_round2(x : Int, n : Int) -> Int {
 }
 
 ///|
-fn av1_cos128(angle : Int) -> Int {
+fn av1_cos128(angle : Int32) -> Int32 {
+  av1_cos_table[angle & 255]
+}
+
+///|
+let av1_cos_table : FixedArray[Int32] = FixedArray::makei(256, fn(a) {
+  av1_cos128_slow(a)
+})
+
+///|
+fn av1_cos128_slow(angle : Int32) -> Int32 {
   let a = angle & 255
   if a <= 64 {
     av1_cos128_lut[a]
@@ -26,7 +36,7 @@ fn av1_cos128(angle : Int) -> Int {
 }
 
 ///|
-fn av1_brev(bits : Int, x : Int) -> Int {
+fn av1_brev(bits : Int32, x : Int32) -> Int32 {
   let mut t = 0
   for i in 0..<bits {
     t = t | (((x >> i) & 1) << (bits - 1 - i))
@@ -36,7 +46,13 @@ fn av1_brev(bits : Int, x : Int) -> Int {
 
 ///|
 /// Butterfly rotation B( a, b, angle, flip ).
-fn av1_b(t : FixedArray[Int], a : Int, b : Int, angle : Int, flip : Bool) -> Unit {
+fn av1_b(
+  t : FixedArray[Int32],
+  a : Int32,
+  b : Int32,
+  angle : Int32,
+  flip : Bool,
+) -> Unit {
   let c = av1_cos128(angle)
   let s = av1_cos128(angle - 64)
   let x = t[a] * c - t[b] * s
@@ -54,7 +70,13 @@ fn av1_b(t : FixedArray[Int], a : Int, b : Int, angle : Int, flip : Bool) -> Uni
 
 ///|
 /// Hadamard rotation H( a, b, flip, r ).
-fn av1_h(t : FixedArray[Int], a0 : Int, b0 : Int, flip : Bool, r : Int) -> Unit {
+fn av1_h(
+  t : FixedArray[Int32],
+  a0 : Int32,
+  b0 : Int32,
+  flip : Bool,
+  r : Int32,
+) -> Unit {
   let (a, b) = if flip { (b0, a0) } else { (a0, b0) }
   let x = t[a]
   let y = t[b]
@@ -68,7 +90,7 @@ fn av1_h(t : FixedArray[Int], a0 : Int, b0 : Int, flip : Bool, r : Int) -> Unit 
 
 ///|
 /// In-place inverse DCT of length 2^n.
-fn av1_inv_dct(t : FixedArray[Int], n : Int, r : Int) -> Unit {
+fn av1_inv_dct(t : FixedArray[Int32], n : Int32, r : Int32) -> Unit {
   let len = 1 << n
   let copy = FixedArray::makei(len, fn(i) { t[i] })
   for i in 0..<len {
@@ -256,7 +278,7 @@ fn av1_inv_dct(t : FixedArray[Int], n : Int, r : Int) -> Unit {
 }
 
 ///|
-fn av1_inv_adst4(t : FixedArray[Int]) -> Unit {
+fn av1_inv_adst4(t : FixedArray[Int32]) -> Unit {
   let sinpi1 = 1321
   let sinpi2 = 2482
   let sinpi3 = 3344
@@ -287,7 +309,7 @@ fn av1_inv_adst4(t : FixedArray[Int]) -> Unit {
 }
 
 ///|
-fn av1_adst_in_perm(t : FixedArray[Int], n : Int) -> Unit {
+fn av1_adst_in_perm(t : FixedArray[Int32], n : Int32) -> Unit {
   let n0 = 1 << n
   let copy = FixedArray::makei(n0, fn(i) { t[i] })
   for i in 0..<n0 {
@@ -297,7 +319,7 @@ fn av1_adst_in_perm(t : FixedArray[Int], n : Int) -> Unit {
 }
 
 ///|
-fn av1_adst_out_perm(t : FixedArray[Int], n : Int) -> Unit {
+fn av1_adst_out_perm(t : FixedArray[Int32], n : Int32) -> Unit {
   let n0 = 1 << n
   let copy = FixedArray::makei(n0, fn(i) { t[i] })
   for i in 0..<n0 {
@@ -311,7 +333,7 @@ fn av1_adst_out_perm(t : FixedArray[Int], n : Int) -> Unit {
 }
 
 ///|
-fn av1_inv_adst8(t : FixedArray[Int], r : Int) -> Unit {
+fn av1_inv_adst8(t : FixedArray[Int32], r : Int32) -> Unit {
   av1_adst_in_perm(t, 3)
   for i in 0..<4 {
     av1_b(t, 2 * i, 2 * i + 1, 60 - 16 * i, true)
@@ -334,7 +356,7 @@ fn av1_inv_adst8(t : FixedArray[Int], r : Int) -> Unit {
 }
 
 ///|
-fn av1_inv_adst16(t : FixedArray[Int], r : Int) -> Unit {
+fn av1_inv_adst16(t : FixedArray[Int32], r : Int32) -> Unit {
   av1_adst_in_perm(t, 4)
   for i in 0..<8 {
     av1_b(t, 2 * i, 2 * i + 1, 62 - 8 * i, true)
@@ -368,7 +390,7 @@ fn av1_inv_adst16(t : FixedArray[Int], r : Int) -> Unit {
 }
 
 ///|
-fn av1_inv_identity(t : FixedArray[Int], n : Int) -> Unit {
+fn av1_inv_identity(t : FixedArray[Int32], n : Int32) -> Unit {
   let len = 1 << n
   for i in 0..<len {
     t[i] = match n {
@@ -382,7 +404,12 @@ fn av1_inv_identity(t : FixedArray[Int], n : Int) -> Unit {
 
 ///|
 /// 1-D transform kinds: 0 DCT, 1 ADST, 2 identity (flips are not used).
-fn av1_inv_1d(t : FixedArray[Int], kind : Int, n : Int, r : Int) -> Unit {
+fn av1_inv_1d(
+  t : FixedArray[Int32],
+  kind : Int32,
+  n : Int32,
+  r : Int32,
+) -> Unit {
   match kind {
     0 => av1_inv_dct(t, n, r)
     1 =>
@@ -399,7 +426,7 @@ fn av1_inv_1d(t : FixedArray[Int], kind : Int, n : Int, r : Int) -> Unit {
 
 ///|
 /// Row (horizontal) and column (vertical) 1-D kinds of a transform type.
-fn av1_tx_row_kind(tx_type : Int) -> Int {
+fn av1_tx_row_kind(tx_type : Int32) -> Int32 {
   match tx_type {
     0 | 1 | 4 | 11 => 0 // DCT_DCT, ADST_DCT, FLIPADST_DCT, H_DCT
     2 | 3 | 5 | 6 | 7 | 8 | 13 | 15 => 1
@@ -408,7 +435,7 @@ fn av1_tx_row_kind(tx_type : Int) -> Int {
 }
 
 ///|
-fn av1_tx_col_kind(tx_type : Int) -> Int {
+fn av1_tx_col_kind(tx_type : Int32) -> Int32 {
   match tx_type {
     0 | 2 | 5 | 10 => 0 // DCT_DCT, DCT_ADST, DCT_FLIPADST, V_DCT
     1 | 3 | 4 | 6 | 7 | 8 | 12 | 14 => 1
@@ -420,10 +447,10 @@ fn av1_tx_col_kind(tx_type : Int) -> Int {
 /// 2-D inverse transform (8-bit, not lossless): `dq` holds the dequantized
 /// coefficients (h x w, row-major); the residual goes to `res` (h x w).
 fn av1_inverse_2d(
-  dq : FixedArray[Int],
-  tx_size : Int,
-  tx_type : Int,
-  res : FixedArray[Int],
+  dq : FixedArray[Int32],
+  tx_size : Int32,
+  tx_type : Int32,
+  res : FixedArray[Int32],
 ) -> Unit {
   let log2w = av1_tx_width_log2[tx_size]
   let log2h = av1_tx_height_log2[tx_size]
@@ -475,7 +502,7 @@ fn av1_inverse_2d(
 let av1_fwd_mats : Array[FixedArray[Double]?] = Array::make(24, None)
 
 ///|
-fn av1_fwd_matrix(kind : Int, n : Int) -> FixedArray[Double] {
+fn av1_fwd_matrix(kind : Int32, n : Int32) -> FixedArray[Double] {
   match av1_fwd_mats[kind * 8 + n] {
     Some(m) => m
     None => {
@@ -502,7 +529,7 @@ fn av1_fwd_matrix(kind : Int, n : Int) -> FixedArray[Double] {
 
 ///|
 /// Gauss-Jordan inverse of a len x len matrix.
-fn av1_mat_inverse(a : FixedArray[Double], len : Int) -> FixedArray[Double] {
+fn av1_mat_inverse(a : FixedArray[Double], len : Int32) -> FixedArray[Double] {
   let m = FixedArray::makei(len * len, fn(i) { a[i] })
   let r = FixedArray::makei(len * len, fn(i) {
     if i / len == i % len {
@@ -553,17 +580,17 @@ fn av1_mat_inverse(a : FixedArray[Double], len : Int) -> FixedArray[Double] {
 /// `out` (h x w, row-major; only the top-left 32 x 32 is used for 64-point
 /// sizes), in the domain of the decoder's dequantized coefficients.
 fn av1_forward_2d(
-  res : FixedArray[Int],
-  tx_size : Int,
-  tx_type : Int,
+  res : FixedArray[Int32],
+  tx_size : Int32,
+  tx_type : Int32,
   out : FixedArray[Double],
 ) -> Unit {
   let log2w = av1_tx_width_log2[tx_size]
   let log2h = av1_tx_height_log2[tx_size]
   let w = 1 << log2w
   let h = 1 << log2h
-  let fr = av1_fwd_matrix(av1_tx_row_kind(tx_type), log2w)
-  let fc = av1_fwd_matrix(av1_tx_col_kind(tx_type), log2h)
+  let rk = av1_tx_row_kind(tx_type)
+  let ck = av1_tx_col_kind(tx_type)
   let rect = log2w - log2h == 1 || log2h - log2w == 1
   // Undo the shifts and the rectangular scaling of the inverse.
   let mut scale = (1 << (av1_transform_row_shift[tx_size] + 4)).to_double()
@@ -572,27 +599,188 @@ fn av1_forward_2d(
   }
   let ow = if w > 32 { 32 } else { w }
   let oh = if h > 32 { 32 } else { h }
-  // tmp = res * fr^T (rows), then out = fc * tmp (columns).
-  let tmp = FixedArray::make(h * ow, 0.0)
+  let line = av1_fwd_line
+  let lout = av1_fwd_lout
+  // Rows into tmp (h x ow).
+  let tmp = av1_fwd_tmp
   for i in 0..<h {
+    for j in 0..<w {
+      line[j] = res[i * w + j].to_double()
+    }
+    av1_fwd_1d(rk, log2w, line, lout)
     for k in 0..<ow {
-      let mut s = 0.0
-      for j in 0..<w {
-        s = s + fr[k * w + j] * res[i * w + j].to_double()
-      }
-      tmp[i * ow + k] = s
+      tmp[i * ow + k] = lout[k]
     }
   }
   for i in 0..<(h * w) {
     out[i] = 0.0
   }
-  for k in 0..<oh {
-    for j in 0..<ow {
-      let mut s = 0.0
-      for i in 0..<h {
-        s = s + fc[k * h + i] * tmp[i * ow + j]
-      }
-      out[k * w + j] = s * scale
+  for j in 0..<ow {
+    for i in 0..<h {
+      line[i] = tmp[i * ow + j]
+    }
+    av1_fwd_1d(ck, log2h, line, lout)
+    for k in 0..<oh {
+      out[k * w + j] = lout[k] * scale
     }
   }
 }
+
+///|
+let av1_fwd_line : FixedArray[Double] = FixedArray::make(64, 0.0)
+
+///|
+let av1_fwd_lout : FixedArray[Double] = FixedArray::make(64, 0.0)
+
+///|
+/// Forward 1-D transform (the inverse of the decoder's 1-D transform).
+fn av1_fwd_1d(
+  kind : Int32,
+  n : Int32,
+  x : FixedArray[Double],
+  y : FixedArray[Double],
+) -> Unit {
+  let len = 1 << n
+  if kind == 0 {
+    av1_dct2(x, 0, len, y, 0, av1_dct_scratch, 0)
+    let sc = av1_dct_scale(n)
+    for k in 0..<len {
+      y[k] = y[k] * sc[k]
+    }
+  } else if kind == 2 {
+    // Identity: invert the decoder's scaling.
+    let f = match n {
+      2 => 4096.0 / 5793.0
+      3 => 0.5
+      4 => 4096.0 / 11586.0
+      _ => 0.25
+    }
+    for k in 0..<len {
+      y[k] = x[k] * f
+    }
+  } else {
+    let m = av1_fwd_matrix(kind, n)
+    for k in 0..<len {
+      let mut s = 0.0
+      for j in 0..<len {
+        s = s + m[k * len + j] * x[j]
+      }
+      y[k] = s
+    }
+  }
+}
+
+///|
+let av1_dct_scratch : FixedArray[Double] = FixedArray::make(512, 0.0)
+
+///|
+/// Unnormalized DCT-II y[k] = sum x[n] cos(pi (2n + 1) k / 2N) of
+/// x[off ..< off + len], by the even / odd decomposition.
+fn av1_dct2(
+  x : FixedArray[Double],
+  off : Int32,
+  len : Int32,
+  y : FixedArray[Double],
+  yoff : Int32,
+  sc : FixedArray[Double],
+  soff : Int32,
+) -> Unit {
+  if len == 1 {
+    y[yoff] = x[off]
+    return
+  }
+  let half = len >> 1
+  for i in 0..<half {
+    let a = x[off + i]
+    let b = x[off + len - 1 - i]
+    sc[soff + i] = a + b
+    sc[soff + half + i] = a - b
+  }
+  // Even outputs: DCT of the sums (written after the odd values).
+  av1_dct2(sc, soff, half, sc, soff + len, sc, soff + len + half)
+  for k in 0..<half {
+    y[yoff + 2 * k] = sc[soff + len + k]
+  }
+  // Odd outputs from the differences.
+  let tab = av1_dct_odd(len)
+  for k in 0..<half {
+    let mut s = 0.0
+    let to = k * half
+    for i in 0..<half {
+      s = s + tab[to + i] * sc[soff + half + i]
+    }
+    y[yoff + 2 * k + 1] = s
+  }
+}
+
+///|
+let av1_dct_odd_tabs : Array[FixedArray[Double]?] = Array::make(8, None)
+
+///|
+/// cos(pi (2i + 1)(2k + 1) / 2N) for k, i < N / 2.
+fn av1_dct_odd(len : Int32) -> FixedArray[Double] {
+  let n = av1_floor_log2(len)
+  match av1_dct_odd_tabs[n] {
+    Some(t) => t
+    None => {
+      let half = len >> 1
+      let pi = 3.141592653589793
+      let t = FixedArray::makei(half * half, fn(idx) {
+        let k = idx / half
+        let i = idx % half
+        @math.cos(
+          (2 * i + 1).to_double() *
+          (2 * k + 1).to_double() *
+          pi /
+          (2 * len).to_double(),
+        )
+      })
+      av1_dct_odd_tabs[n] = Some(t)
+      t
+    }
+  }
+}
+
+///|
+let av1_dct_scales : Array[FixedArray[Double]?] = Array::make(8, None)
+
+///|
+/// Per-output scale turning the unnormalized DCT-II into the inverse of the
+/// decoder's DCT: the decoder computes x[n] = sum_k w[k] X[k] cos(..), with
+/// w[k] measured from its integer implementation.
+fn av1_dct_scale(n : Int32) -> FixedArray[Double] {
+  match av1_dct_scales[n] {
+    Some(s) => s
+    None => {
+      let len = 1 << n
+      let pi = 3.141592653589793
+      let amp = 1 << 10
+      let t = FixedArray::make(64, 0)
+      let sc = FixedArray::make(len, 0.0)
+      for k in 0..<len {
+        for i in 0..<len {
+          t[i] = if i == k { amp } else { 0 }
+        }
+        av1_inv_dct(t, n, 20)
+        // Least-squares fit of the column to cos(pi (2i + 1) k / 2N).
+        let mut num = 0.0
+        let mut den = 0.0
+        for i in 0..<len {
+          let c = @math.cos(
+            (2 * i + 1).to_double() * k.to_double() * pi / (2 * len).to_double(),
+          )
+          num = num + t[i].to_double() / amp.to_double() * c
+          den = den + c * c
+        }
+        let wk = num / den
+        let e = if k == 0 { 0.5 } else { 1.0 }
+        sc[k] = 2.0 / len.to_double() * e / wk
+      }
+      av1_dct_scales[n] = Some(sc)
+      sc
+    }
+  }
+}
+
+///|
+let av1_fwd_tmp : FixedArray[Double] = FixedArray::make(64 * 64, 0.0)

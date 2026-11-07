@@ -1,4 +1,8 @@
-"""Extract AV1 tables from the spec text (data) into a MoonBit file."""
+"""Extract AV1 tables from the spec text into src/av1_tables.mbt.
+
+Usage: python3 tools/gen_av1_tables.py spec.txt src/av1_tables.mbt
+where spec.txt is the AV1 Bitstream & Decoding Process Specification
+(https://aomediacodec.github.io/av1-spec/) converted to plain text."""
 import re, sys
 spec = open(sys.argv[1], encoding="utf-8").read().split("\n")
 out_path = sys.argv[2]
@@ -38,7 +42,6 @@ tables = [
   ("av1_ac_qlookup", "Ac_Qlookup", 768),
   ("av1_intra_mode_context", "Intra_Mode_Context", 13),
   ("av1_coeff_base_ctx_offset", "Coeff_Base_Ctx_Offset", 19 * 25),
-  ("av1_coeff_base_pos_ctx_offset", "Coeff_Base_Pos_Ctx_Offset", 3),
   ("av1_sig_ref_diff_offset", "Sig_Ref_Diff_Offset", 30),
   ("av1_mag_ref_offset", "Mag_Ref_Offset_With_Tx_Class", 18),
   ("av1_mode_to_txfm", "Mode_To_Txfm", 14),
@@ -87,14 +90,7 @@ cdfs = [
   ("av1_cdf_partition_w64", "Default_Partition_W64_Cdf", 10, 4),
   ("av1_cdf_partition_w128", "Default_Partition_W128_Cdf", 8, 4),
   ("av1_cdf_skip", "Default_Skip_Cdf", 2, 3),
-  ("av1_cdf_tx_8x8", "Default_Tx_8x8_Cdf", 2, 3),
-  ("av1_cdf_tx_16x16", "Default_Tx_16x16_Cdf", 3, 3),
-  ("av1_cdf_tx_32x32", "Default_Tx_32x32_Cdf", 3, 3),
-  ("av1_cdf_tx_64x64", "Default_Tx_64x64_Cdf", 3, 3),
-  ("av1_cdf_intra_tx_type_set1", "Default_Intra_Tx_Type_Set1_Cdf", 7, 2 * 13),
   ("av1_cdf_intra_tx_type_set2", "Default_Intra_Tx_Type_Set2_Cdf", 5, 3 * 13),
-  ("av1_cdf_cfl_sign", "Default_Cfl_Sign_Cdf", 8, 1),
-  ("av1_cdf_cfl_alpha", "Default_Cfl_Alpha_Cdf", 16, 6),
   ("av1_cdf_txb_skip", "Default_Txb_Skip_Cdf", 2, 4 * 5 * 13),
   ("av1_cdf_eob_pt_16", "Default_Eob_Pt_16_Cdf", 5, 4 * 2 * 2),
   ("av1_cdf_eob_pt_32", "Default_Eob_Pt_32_Cdf", 6, 4 * 2 * 2),

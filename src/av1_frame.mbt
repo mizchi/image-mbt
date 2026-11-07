@@ -5,37 +5,37 @@
 ///|
 /// Saved encoder state of a block region (for dry runs).
 priv struct Av1Snap {
-  rec : Array[FixedArray[Int]]
-  rect : FixedArray[Int] // per plane: x0, y0, x1, y1
-  above_level : Array[FixedArray[Int]]
-  above_dc : Array[FixedArray[Int]]
-  left_level : Array[FixedArray[Int]]
-  left_dc : Array[FixedArray[Int]]
-  ctx_rect : FixedArray[Int] // per plane: ax0, ax1, ly0, ly1
+  rec : Array[FixedArray[Int32]]
+  rect : FixedArray[Int32] // per plane: x0, y0, x1, y1
+  above_level : Array[FixedArray[Int32]]
+  above_dc : Array[FixedArray[Int32]]
+  left_level : Array[FixedArray[Int32]]
+  left_dc : Array[FixedArray[Int32]]
+  ctx_rect : FixedArray[Int32] // per plane: ax0, ax1, ly0, ly1
   decoded : FixedArray[Bool]
-  mi : Array[FixedArray[Int]] // size, ymode, uvmode, skip, tx_types
-  mi_rect : FixedArray[Int] // r0, c0, r1, c1
+  mi : Array[FixedArray[Int32]] // size, ymode, uvmode, skip, tx_types
+  mi_rect : FixedArray[Int32] // r0, c0, r1, c1
 }
 
 ///|
-fn Av1Enc::snapshot(self : Av1Enc, r : Int, c : Int, bs : Int) -> Av1Snap {
+fn Av1Enc::snapshot(self : Av1Enc, r : Int32, c : Int32, bs : Int32) -> Av1Snap {
   let bw4 = av1_bw4(bs)
   let bh4 = av1_bh4(bs)
   let rect = FixedArray::make(12, 0)
   let ctx_rect = FixedArray::make(12, 0)
-  let rec : Array[FixedArray[Int]] = []
-  let al : Array[FixedArray[Int]] = []
-  let ad : Array[FixedArray[Int]] = []
-  let ll : Array[FixedArray[Int]] = []
-  let ld : Array[FixedArray[Int]] = []
+  let rec : Array[FixedArray[Int32]] = []
+  let al : Array[FixedArray[Int32]] = []
+  let ad : Array[FixedArray[Int32]] = []
+  let ll : Array[FixedArray[Int32]] = []
+  let ld : Array[FixedArray[Int32]] = []
   for p in 0..<self.num_planes {
     let sub = if p > 0 { self.ss } else { 0 }
     // Mode info units covered by this plane's samples (chroma 4x4 blocks
     // cover a 2x2 mode info area).
-    let c0 = (c >> sub) << sub
-    let r0 = (r >> sub) << sub
-    let c1 = ((c + bw4 + sub) >> sub) << sub
-    let r1 = ((r + bh4 + sub) >> sub) << sub
+    let c0 = c >> sub << sub
+    let r0 = r >> sub << sub
+    let c1 = (c + bw4 + sub) >> sub << sub
+    let r1 = (r + bh4 + sub) >> sub << sub
     let x0 = (c0 * 4) >> sub
     let y0 = (r0 * 4) >> sub
     let x1 = (c1 * 4) >> sub
@@ -61,7 +61,9 @@ fn Av1Enc::snapshot(self : Av1Enc, r : Int, c : Int, bs : Int) -> Av1Snap {
     ctx_rect[p * 4 + 1] = ax1
     ctx_rect[p * 4 + 2] = ly0
     ctx_rect[p * 4 + 3] = ly1
-    al.push(FixedArray::makei(ax1 - ax0, fn(i) { self.above_level[p][ax0 + i] }))
+    al.push(
+      FixedArray::makei(ax1 - ax0, fn(i) { self.above_level[p][ax0 + i] }),
+    )
     ad.push(FixedArray::makei(ax1 - ax0, fn(i) { self.above_dc[p][ax0 + i] }))
     ll.push(FixedArray::makei(ly1 - ly0, fn(i) { self.left_level[p][ly0 + i] }))
     ld.push(FixedArray::makei(ly1 - ly0, fn(i) { self.left_dc[p][ly0 + i] }))
@@ -84,14 +86,15 @@ fn Av1Enc::snapshot(self : Av1Enc, r : Int, c : Int, bs : Int) -> Av1Snap {
       self.mi_cols
     }
   }
-  let mi : Array[FixedArray[Int]] = []
-  for a in [
-    self.mi_size,
-    self.mi_ymode,
-    self.mi_uvmode,
-    self.mi_skip,
-    self.tx_types,
-  ] {
+  let mi : Array[FixedArray[Int32]] = []
+  for
+    a in [
+      self.mi_size,
+      self.mi_ymode,
+      self.mi_uvmode,
+      self.mi_skip,
+      self.tx_types,
+    ] {
     let b = FixedArray::make(
       (if r1 > r0 { r1 - r0 } else { 0 }) * (if c1 > c0 { c1 - c0 } else { 0 }),
       0,
@@ -170,63 +173,6 @@ fn Av1Enc::restore(self : Av1Enc, s : Av1Snap) -> Unit {
 }
 
 ///|
-/// Encode one block: decide the skip flag with a dry run, then code it.
-fn Av1Enc::encode_block(
-  self : Av1Enc,
-  r : Int,
-  c : Int,
-  bs : Int,
-  mode : Av1BlockMode,
-) -> Unit {
-  self.begin_block(r, c, bs)
-  let snap = self.snapshot(r, c, bs)
-  self.mode = mode
-  mode.skip = false
-  self.dry = true
-  self.any_nonzero = false
-  self.code_block()
-  let nz = self.any_nonzero
-  self.restore(snap)
-  self.dry = false
-  mode.skip = !nz
-  self.code_block()
-}
-
-///|
-/// Largest block size used without a mode decision (stage 2: fixed).
-let av1_fixed_block = 3
-
-///|
-fn Av1Enc::encode_partition(self : Av1Enc, r : Int, c : Int, bs : Int) -> Unit {
-  if r >= self.mi_rows || c >= self.mi_cols {
-    return
-  }
-  let half = av1_bw4(bs) >> 1
-  let has_rows = r + half < self.mi_rows
-  let has_cols = c + half < self.mi_cols
-  let partition = if bs == av1_block_8x8 {
-    0
-  } else if !(has_rows && has_cols) {
-    3
-  } else if bs > av1_fixed_block {
-    3
-  } else {
-    0
-  }
-  self.write_partition(r, c, bs, partition, has_rows, has_cols)
-  if partition == 0 {
-    let m = Av1BlockMode::new()
-    self.encode_block(r, c, bs, m)
-  } else {
-    let sub = av1_subsize(3, bs)
-    self.encode_partition(r, c, sub)
-    self.encode_partition(r, c + half, sub)
-    self.encode_partition(r + half, c, sub)
-    self.encode_partition(r + half, c + half, sub)
-  }
-}
-
-///|
 /// Encode the frame as one tile; returns the tile data.
 fn Av1Enc::encode_tile(self : Av1Enc) -> Array[Byte] {
   let mut r = 0
@@ -238,7 +184,13 @@ fn Av1Enc::encode_tile(self : Av1Enc) -> Array[Byte] {
     let mut c = 0
     while c < self.mi_cols {
       self.clear_decoded(r, c)
-      self.encode_partition(r, c, av1_block_64x64)
+      // Decide the superblock with dry runs, then write it.
+      let snap = self.snapshot(r, c, av1_block_64x64)
+      self.dry = true
+      let (_, tree) = self.search(r, c, av1_block_64x64)
+      self.restore(snap)
+      self.dry = false
+      self.write_tree(r, c, av1_block_64x64, tree)
       c += 16
     }
     r += 16
@@ -247,18 +199,18 @@ fn Av1Enc::encode_tile(self : Av1Enc) -> Array[Byte] {
 }
 
 ///|
-fn av1_bits_for(v : Int) -> Int {
+fn av1_bits_for(v : Int32) -> Int32 {
   let mut n = 1
-  while (v >> n) != 0 {
+  while v >> n != 0 {
     n += 1
   }
   n
 }
 
 ///|
-fn av1_tile_log2(blk : Int, target : Int) -> Int {
+fn av1_tile_log2(blk : Int32, target : Int32) -> Int32 {
   let mut k = 0
-  while (blk << k) < target {
+  while blk << k < target {
     k += 1
   }
   k
@@ -266,7 +218,7 @@ fn av1_tile_log2(blk : Int, target : Int) -> Int {
 
 ///|
 /// seq_level_idx for a picture size (spec Annex A limits).
-fn av1_level_for(w : Int, h : Int) -> Int {
+fn av1_level_for(w : Int32, h : Int32) -> Int32 {
   let area = w * h
   let limits = [
     (0, 147456, 2048, 1152),
@@ -288,8 +240,8 @@ fn av1_level_for(w : Int, h : Int) -> Int {
 
 ///|
 /// OBU with obu_has_size_field set.
-fn av1_obu(out : Array[Byte], obu_type : Int, payload : Array[Byte]) -> Unit {
-  out.push((obu_type << 3 | 2).to_byte())
+fn av1_obu(out : Array[Byte], obu_type : Int32, payload : Array[Byte]) -> Unit {
+  out.push(((obu_type << 3) | 2).to_byte())
   av1_leb128(out, payload.length())
   for b in payload {
     out.push(b)
@@ -298,7 +250,7 @@ fn av1_obu(out : Array[Byte], obu_type : Int, payload : Array[Byte]) -> Unit {
 
 ///|
 /// Sequence header OBU payload (reduced still picture header).
-fn av1_sequence_header(w : Int, h : Int, mono : Bool) -> Array[Byte] {
+fn av1_sequence_header(w : Int32, h : Int32, mono : Bool) -> Array[Byte] {
   let bw = Av1BitWriter::new()
   bw.put(0, 3) // seq_profile
   bw.put(1, 1) // still_picture
@@ -338,7 +290,7 @@ fn av1_sequence_header(w : Int, h : Int, mono : Bool) -> Array[Byte] {
 
 ///|
 /// Frame OBU payload: uncompressed header + one tile.
-fn av1_frame_payload(enc : Av1Enc, lf : (Int, Int, Int)) -> Array[Byte] {
+fn av1_frame_payload(enc : Av1Enc, lf : (Int32, Int32, Int32)) -> Array[Byte] {
   let bw = Av1BitWriter::new()
   bw.put(0, 1) // disable_cdf_update
   bw.put(0, 1) // allow_screen_content_tools
@@ -389,17 +341,35 @@ fn av1_frame_payload(enc : Av1Enc, lf : (Int, Int, Int)) -> Array[Byte] {
 
 ///|
 /// Encode planes (Y or Y/U/V 4:2:0) as an AV1 still picture: returns the
-/// sequence header OBU and the frame OBU.
+/// sequence header OBU, the frame OBU and the encoder (whose
+/// reconstruction equals the decoder's output without `loop_filter`).
 fn av1_encode_still(
-  planes : Array[FixedArray[Int]],
-  w : Int,
-  h : Int,
-  qidx : Int,
+  planes : Array[FixedArray[Int32]],
+  w : Int32,
+  h : Int32,
+  qidx : Int32,
+  loop_filter~ : Bool = true,
 ) -> (Array[Byte], Array[Byte], Av1Enc) {
   let enc = Av1Enc::new(planes, w, h, qidx)
   let seq : Array[Byte] = []
   av1_obu(seq, 1, av1_sequence_header(w, h, planes.length() == 1))
   let frame : Array[Byte] = []
-  av1_obu(frame, 6, av1_frame_payload(enc, (0, 0, 0)))
+  let lf = if loop_filter { av1_filter_level(qidx) } else { 0 }
+  av1_obu(frame, 6, av1_frame_payload(enc, (lf, lf, lf)))
   (seq, frame, enc)
+}
+
+///|
+/// Deblocking filter level from the quantizer (libaom's
+/// choose-from-quantizer formula for key frames).
+fn av1_filter_level(qidx : Int32) -> Int32 {
+  let q = av1_ac_qlookup[qidx]
+  let f = (q * 20723 + 1015158 + (1 << 17)) >> 18
+  if f < 0 {
+    0
+  } else if f > 63 {
+    63
+  } else {
+    f
+  }
 }

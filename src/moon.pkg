@@ -2,11 +2,12 @@ import {
   "mizchi/zlib",
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
+  "moonbitlang/core/math",
 }
 
 options(
   targets: {
-    "avif_encode_test.mbt": [ "js" ],
+    "avif_encode_js_wbtest.mbt": [ "js" ],
     "jpeg_fdct_scalar.mbt": [ "not", "wasm" ],
     "jpeg_fdct_simd.mbt": [ "wasm" ],
     "jpeg_idct_scalar.mbt": [ "not", "wasm" ],

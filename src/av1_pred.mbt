@@ -3,7 +3,7 @@
 // header) and without filter intra / CfL / palette.
 
 ///|
-fn av1_sm_weights(log2 : Int) -> FixedArray[Int] {
+fn av1_sm_weights(log2 : Int32) -> FixedArray[Int32] {
   match log2 {
     2 => av1_sm_weights_4
     3 => av1_sm_weights_8
@@ -17,13 +17,13 @@ fn av1_sm_weights(log2 : Int) -> FixedArray[Int] {
 /// Scratch edge buffers: `above[i + 1]` is AboveRow[ i ] (i >= -1) and
 /// `left[i + 1]` is LeftCol[ i ].
 priv struct Av1Edges {
-  above : FixedArray[Int]
-  left : FixedArray[Int]
+  above : FixedArray[Int32]
+  left : FixedArray[Int32]
 }
 
 ///|
 fn Av1Edges::new() -> Av1Edges {
-  { above: FixedArray::make(160, 0), left: FixedArray::make(160, 0) }
+  { above: FixedArray::make(160, 0), left: FixedArray::make(160, 0), }
 }
 
 ///|
@@ -31,20 +31,20 @@ fn Av1Edges::new() -> Av1Edges {
 /// reconstructed neighbours. `max_x` / `max_y` are the last valid sample
 /// coordinates of the (mode-info aligned) plane.
 fn av1_predict_intra(
-  buf : FixedArray[Int],
-  stride : Int,
-  x : Int,
-  y : Int,
+  buf : FixedArray[Int32],
+  stride : Int32,
+  x : Int32,
+  y : Int32,
   have_left : Bool,
   have_above : Bool,
   have_above_right : Bool,
   have_below_left : Bool,
-  mode : Int,
-  angle_delta : Int,
-  log2w : Int,
-  log2h : Int,
-  max_x : Int,
-  max_y : Int,
+  mode : Int32,
+  angle_delta : Int32,
+  log2w : Int32,
+  log2h : Int32,
+  max_x : Int32,
+  max_y : Int32,
   e : Av1Edges,
 ) -> Unit {
   let w = 1 << log2w
@@ -274,7 +274,7 @@ fn av1_predict_intra(
 }
 
 ///|
-fn av1_clip_pixel(v : Int) -> Int {
+fn av1_clip_pixel(v : Int32) -> Int32 {
   if v < 0 {
     0
   } else if v > 255 {

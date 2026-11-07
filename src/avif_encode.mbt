@@ -19,8 +19,8 @@ fn avif_box(out : Array[Byte], typ : String, body : Array[Byte]) -> Unit {
 fn avif_full_box(
   out : Array[Byte],
   typ : String,
-  version : Int,
-  flags : Int,
+  version : Int32,
+  flags : Int32,
   body : Array[Byte],
 ) -> Unit {
   let b : Array[Byte] = []
@@ -35,7 +35,7 @@ fn avif_full_box(
 }
 
 ///|
-fn avif_u32(out : Array[Byte], v : Int) -> Unit {
+fn avif_u32(out : Array[Byte], v : Int32) -> Unit {
   out.push((v >> 24).to_byte())
   out.push((v >> 16).to_byte())
   out.push((v >> 8).to_byte())
@@ -43,7 +43,7 @@ fn avif_u32(out : Array[Byte], v : Int) -> Unit {
 }
 
 ///|
-fn avif_u16(out : Array[Byte], v : Int) -> Unit {
+fn avif_u16(out : Array[Byte], v : Int32) -> Unit {
   out.push((v >> 8).to_byte())
   out.push(v.to_byte())
 }
@@ -57,10 +57,15 @@ fn avif_str(out : Array[Byte], s : String) -> Unit {
 
 ///|
 /// av1C configuration box body for a still picture.
-fn avif_av1c(seq_obu : Array[Byte], w : Int, h : Int, mono : Bool) -> Array[Byte] {
+fn avif_av1c(
+  seq_obu : Array[Byte],
+  w : Int32,
+  h : Int32,
+  mono : Bool,
+) -> Array[Byte] {
   let b : Array[Byte] = [b'\x81']
   b.push(av1_level_for(w, h).to_byte()) // seq_profile 0
-  b.push(((if mono { 1 } else { 0 }) << 4 | 1 << 3 | 1 << 2).to_byte())
+  b.push((((if mono { 1 } else { 0 }) << 4) | (1 << 3) | (1 << 2)).to_byte())
   b.push(b'\x00')
   for x in seq_obu {
     b.push(x)
@@ -70,14 +75,8 @@ fn avif_av1c(seq_obu : Array[Byte], w : Int, h : Int, mono : Bool) -> Array[Byte
 
 ///|
 /// Map a 0..100 quality to an AV1 base_q_idx.
-fn avif_quality_to_qidx(quality : Int) -> Int {
-  let q = if quality < 0 {
-    0
-  } else if quality > 100 {
-    100
-  } else {
-    quality
-  }
+fn avif_quality_to_qidx(quality : Int32) -> Int32 {
+  let q = if quality < 0 { 0 } else if quality > 100 { 100 } else { quality }
   let v = ((100 - q) * 255 + 50) / 100
   if v < 1 {
     1
@@ -88,7 +87,7 @@ fn avif_quality_to_qidx(quality : Int) -> Int {
 
 ///|
 /// RGBA -> Y, Cb, Cr (BT.601, full range); chroma averaged over 2x2.
-fn avif_rgb_to_yuv420(img : ImageData) -> Array[FixedArray[Int]] {
+fn avif_rgb_to_yuv420(img : ImageData) -> Array[FixedArray[Int32]] {
   let w = img.width
   let h = img.height
   let cw = (w + 1) >> 1
@@ -132,7 +131,7 @@ fn avif_rgb_to_yuv420(img : ImageData) -> Array[FixedArray[Int]] {
 }
 
 ///|
-fn avif_div_round(a : Int, d : Int) -> Int {
+fn avif_div_round(a : Int32, d : Int32) -> Int32 {
   if a >= 0 {
     (a + d / 2) / d
   } else {
@@ -145,7 +144,7 @@ fn avif_div_round(a : Int, d : Int) -> Int {
 /// better); images with non-opaque pixels get an alpha auxiliary image.
 pub fn encode_avif(
   img : ImageData,
-  quality~ : Int = 75,
+  quality~ : Int32 = 75,
 ) -> Bytes raise EncodeError {
   validate_rgba8_image(img)
   let w = img.width
@@ -185,8 +184,8 @@ fn image_has_non_opaque_alpha(img : ImageData) -> Bool {
 ///|
 /// The HEIF / AVIF boxes around the coded image (and alpha) items.
 fn avif_container(
-  w : Int,
-  h : Int,
+  w : Int32,
+  h : Int32,
   seq : Array[Byte],
   frame : Array[Byte],
   alpha : (Array[Byte], Array[Byte])?,
@@ -199,7 +198,7 @@ fn avif_container(
   let n_items = if alpha is Some(_) { 2 } else { 1 }
   // The meta box is built twice: first to learn its size (the iloc offsets
   // point into mdat, which follows it).
-  let build = fn(mdat_data : Int) -> Array[Byte] {
+  let build = fn(mdat_data : Int32) -> Array[Byte] {
     let out : Array[Byte] = []
     let ftyp : Array[Byte] = []
     avif_str(ftyp, "avif")
@@ -236,7 +235,7 @@ fn avif_container(
     avif_full_box(meta, "iloc", 0, 0, iloc)
     let iinf : Array[Byte] = []
     avif_u16(iinf, n_items)
-    for id in 1..=n_items {
+    for id in 1..<=n_items {
       let infe : Array[Byte] = []
       avif_u16(infe, id)
       avif_u16(infe, 0) // item_protection_index

@@ -6,17 +6,17 @@
 /// MSB-first bit writer (the spec's f(n) descriptors).
 priv struct Av1BitWriter {
   buf : Array[Byte]
-  mut acc : Int
-  mut nbits : Int
+  mut acc : Int32
+  mut nbits : Int32
 }
 
 ///|
 fn Av1BitWriter::new() -> Av1BitWriter {
-  { buf: [], acc: 0, nbits: 0 }
+  { buf: [], acc: 0, nbits: 0, }
 }
 
 ///|
-fn Av1BitWriter::put(self : Av1BitWriter, v : Int, n : Int) -> Unit {
+fn Av1BitWriter::put(self : Av1BitWriter, v : Int32, n : Int32) -> Unit {
   for i = n - 1; i >= 0; i = i - 1 {
     self.acc = (self.acc << 1) | ((v >> i) & 1)
     self.nbits += 1
@@ -51,7 +51,7 @@ fn Av1BitWriter::bytes(self : Av1BitWriter) -> Array[Byte] {
 
 ///|
 /// leb128 encoding of `v` (OBU sizes).
-fn av1_leb128(out : Array[Byte], v : Int) -> Unit {
+fn av1_leb128(out : Array[Byte], v : Int32) -> Unit {
   let mut x = v
   while true {
     let b = x & 0x7f
@@ -68,20 +68,20 @@ fn av1_leb128(out : Array[Byte], v : Int) -> Unit {
 ///|
 /// Range encoder state.
 priv struct Av1SymWriter {
-  precarry : Array[Int]
-  mut low : UInt
-  mut rng : Int
-  mut cnt : Int
+  precarry : Array[Int32]
+  mut low : UInt32
+  mut rng : Int32
+  mut cnt : Int32
 }
 
 ///|
 fn Av1SymWriter::new() -> Av1SymWriter {
-  { precarry: [], low: 0U, rng: 0x8000, cnt: -9 }
+  { precarry: [], low: 0U, rng: 0x8000, cnt: -9, }
 }
 
 ///|
 /// Leading zeros of a 16-bit value.
-fn av1_clz16(v : Int) -> Int {
+fn av1_clz16(v : Int32) -> Int32 {
   let mut n = 0
   let mut x = v
   while n < 16 && (x & 0x8000) == 0 {
@@ -94,13 +94,14 @@ fn av1_clz16(v : Int) -> Int {
 ///|
 /// Encode the interval [fl, fh) of an inverse CDF (32768 - cdf) with
 /// `nms` symbols at or above the coded one.
-fn Av1SymWriter::store(self : Av1SymWriter, fl : Int, fh : Int, nms : Int) -> Unit {
+fn Av1SymWriter::store(
+  self : Av1SymWriter,
+  fl : Int32,
+  fh : Int32,
+  nms : Int32,
+) -> Unit {
   let r = self.rng
-  let u = if fl >= 32768 {
-    r
-  } else {
-    (((r >> 8) * (fl >> 6)) >> 1) + 4 * nms
-  }
+  let u = if fl >= 32768 { r } else { (((r >> 8) * (fl >> 6)) >> 1) + 4 * nms }
   let v = (((r >> 8) * (fh >> 6)) >> 1) + 4 * (nms - 1)
   let mut low = (r - u).reinterpret_as_uint() + self.low
   let rr = u - v
@@ -130,10 +131,10 @@ fn Av1SymWriter::store(self : Av1SymWriter, fl : Int, fh : Int, nms : Int) -> Un
 /// increasing, last 32768) and adapt it (count at `cdf[off + n]`).
 fn Av1SymWriter::symbol(
   self : Av1SymWriter,
-  cdf : FixedArray[Int],
-  off : Int,
-  n : Int,
-  s : Int,
+  cdf : FixedArray[Int32],
+  off : Int32,
+  n : Int32,
+  s : Int32,
 ) -> Unit {
   let fl = if s > 0 { 32768 - cdf[off + s - 1] } else { 32768 }
   let fh = 32768 - cdf[off + s]
@@ -143,7 +144,7 @@ fn Av1SymWriter::symbol(
 
 ///|
 /// One equiprobable bit (read_bool).
-fn Av1SymWriter::bool(self : Av1SymWriter, b : Int) -> Unit {
+fn Av1SymWriter::bool(self : Av1SymWriter, b : Int32) -> Unit {
   // cdf = { 16384, 32768 }
   if b == 0 {
     self.store(32768, 16384, 2)
@@ -154,7 +155,7 @@ fn Av1SymWriter::bool(self : Av1SymWriter, b : Int) -> Unit {
 
 ///|
 /// `n` raw bits, MSB first (read_literal).
-fn Av1SymWriter::literal(self : Av1SymWriter, v : Int, n : Int) -> Unit {
+fn Av1SymWriter::literal(self : Av1SymWriter, v : Int32, n : Int32) -> Unit {
   for i = n - 1; i >= 0; i = i - 1 {
     self.bool((v >> i) & 1)
   }
@@ -196,7 +197,12 @@ fn Av1SymWriter::finish(self : Av1SymWriter) -> Array[Byte] {
 
 ///|
 /// The spec's CDF adaptation after coding `s` (disable_cdf_update = 0).
-fn av1_update_cdf(cdf : FixedArray[Int], off : Int, n : Int, s : Int) -> Unit {
+fn av1_update_cdf(
+  cdf : FixedArray[Int32],
+  off : Int32,
+  n : Int32,
+  s : Int32,
+) -> Unit {
   let cnt = cdf[off + n]
   let rate = 3 +
     (if cnt > 15 { 1 } else { 0 }) +
@@ -216,7 +222,7 @@ fn av1_update_cdf(cdf : FixedArray[Int], off : Int, n : Int, s : Int) -> Unit {
 
 ///|
 /// Cost in 1/256 bit of coding `s` with the CDF at `off` (no update).
-fn av1_symbol_cost(cdf : FixedArray[Int], off : Int, s : Int) -> Int {
+fn av1_symbol_cost(cdf : FixedArray[Int32], off : Int32, s : Int32) -> Int32 {
   let lo = if s > 0 { cdf[off + s - 1] } else { 0 }
   let p = cdf[off + s] - lo
   av1_cost_q15(p)
@@ -224,8 +230,16 @@ fn av1_symbol_cost(cdf : FixedArray[Int], off : Int, s : Int) -> Int {
 
 ///|
 /// -log2(p / 32768) * 256 for p in 1..32768.
-fn av1_cost_q15(p : Int) -> Int {
-  let pp = if p < 1 { 1 } else { p }
-  // 15 * 256 - log2(p) * 256
-  3840 - vp8l_log2_fix(pp)
+fn av1_cost_q15(p : Int32) -> Int32 {
+  av1_cost_table[if p < 1 { 1 } else { p }]
 }
+
+///|
+/// -log2(p / 32768) * 256 for p = 0..32768 (entry 0 is unused).
+let av1_cost_table : FixedArray[Int32] = FixedArray::makei(32769, fn(p) {
+  if p < 1 {
+    3840
+  } else {
+    3840 - vp8l_log2_fix(p)
+  }
+})

@@ -9,19 +9,19 @@ let av1_block_8x8 = 3
 let av1_block_64x64 = 12
 
 ///|
-fn av1_bw4(bs : Int) -> Int {
+fn av1_bw4(bs : Int32) -> Int32 {
   1 << av1_mi_width_log2[bs]
 }
 
 ///|
-fn av1_bh4(bs : Int) -> Int {
+fn av1_bh4(bs : Int32) -> Int32 {
   1 << av1_mi_height_log2[bs]
 }
 
 ///|
 /// Partition_Subsize for square sizes (8x8 .. 64x64): NONE, HORZ, VERT,
 /// SPLIT.
-fn av1_subsize(partition : Int, bs : Int) -> Int {
+fn av1_subsize(partition : Int32, bs : Int32) -> Int32 {
   match (partition, bs) {
     (0, _) => bs
     (1, 3) => 2
@@ -40,7 +40,7 @@ fn av1_subsize(partition : Int, bs : Int) -> Int {
 }
 
 ///|
-fn av1_scan_for(tx_size : Int) -> FixedArray[Int] {
+fn av1_scan_for(tx_size : Int32) -> FixedArray[Int32] {
   match tx_size {
     0 => av1_scan_4x4
     1 => av1_scan_8x8
@@ -61,7 +61,7 @@ fn av1_scan_for(tx_size : Int) -> FixedArray[Int] {
 
 ///|
 /// Intra transform set with reduced_tx_set = 1: 0 DCT only, 2 INTRA_2.
-fn av1_tx_set(tx_size : Int) -> Int {
+fn av1_tx_set(tx_size : Int32) -> Int32 {
   if av1_tx_size_sqr_up[tx_size] >= 3 {
     0
   } else {
@@ -72,7 +72,7 @@ fn av1_tx_set(tx_size : Int) -> Int {
 ///|
 /// Index of a transform type in Tx_Type_Intra_Inv_Set2 (IDTX, DCT_DCT,
 /// ADST_ADST, ADST_DCT, DCT_ADST).
-fn av1_itx2_index(tx_type : Int) -> Int {
+fn av1_itx2_index(tx_type : Int32) -> Int32 {
   match tx_type {
     9 => 0
     0 => 1
@@ -85,78 +85,81 @@ fn av1_itx2_index(tx_type : Int) -> Int {
 ///|
 /// Mode decisions of one block.
 priv struct Av1BlockMode {
-  ymode : Int
-  uvmode : Int
-  angle_y : Int
-  angle_uv : Int
+  mut ymode : Int32
+  mut uvmode : Int32
+  mut angle_y : Int32
+  mut angle_uv : Int32
   mut skip : Bool
   // Luma transform type of each transform block, raster order.
-  tx_types : Array[Int]
+  tx_types : Array[Int32]
 }
 
 ///|
 fn Av1BlockMode::new() -> Av1BlockMode {
-  { ymode: 0, uvmode: 0, angle_y: 0, angle_uv: 0, skip: false, tx_types: [] }
+  { ymode: 0, uvmode: 0, angle_y: 0, angle_uv: 0, skip: false, tx_types: [], }
 }
 
 ///|
 priv struct Av1Enc {
-  width : Int
-  height : Int
-  mi_cols : Int
-  mi_rows : Int
-  num_planes : Int
-  ss : Int
-  stride : FixedArray[Int]
-  src : Array[FixedArray[Int]]
-  rec : Array[FixedArray[Int]]
-  qidx : Int
-  dcq : Int
-  acq : Int
+  width : Int32
+  height : Int32
+  mi_cols : Int32
+  mi_rows : Int32
+  num_planes : Int32
+  ss : Int32
+  stride : FixedArray[Int32]
+  src : Array[FixedArray[Int32]]
+  rec : Array[FixedArray[Int32]]
+  qidx : Int32
+  dcq : Int32
+  acq : Int32
   // Mode info grid (mi units, frame).
-  mi_size : FixedArray[Int]
-  mi_ymode : FixedArray[Int]
-  mi_uvmode : FixedArray[Int]
-  mi_skip : FixedArray[Int]
+  mi_size : FixedArray[Int32]
+  mi_ymode : FixedArray[Int32]
+  mi_uvmode : FixedArray[Int32]
+  mi_skip : FixedArray[Int32]
   // Luma transform type per 4x4.
-  tx_types : FixedArray[Int]
-  above_level : Array[FixedArray[Int]]
-  above_dc : Array[FixedArray[Int]]
-  left_level : Array[FixedArray[Int]]
-  left_dc : Array[FixedArray[Int]]
+  tx_types : FixedArray[Int32]
+  above_level : Array[FixedArray[Int32]]
+  above_dc : Array[FixedArray[Int32]]
+  left_level : Array[FixedArray[Int32]]
+  left_dc : Array[FixedArray[Int32]]
   // BlockDecoded: 3 planes x 18 x 18, offset 1.
   decoded : FixedArray[Bool]
   cdf : Av1Cdfs
   sw : Av1SymWriter
   edges : Av1Edges
   mut dry : Bool
-  mut cost : Int
+  mut search_tx : Bool
+  lambda : Double
+  mut cost : Int32
   mut any_nonzero : Bool
   // Current block.
-  mut mi_row : Int
-  mut mi_col : Int
-  mut bsize : Int
+  mut mi_row : Int32
+  mut mi_col : Int32
+  mut bsize : Int32
   mut avail_u : Bool
   mut avail_l : Bool
   mut avail_uc : Bool
   mut avail_lc : Bool
   mut has_chroma : Bool
-  mut tx_size : Int
+  mut tx_size : Int32
   mut mode : Av1BlockMode
-  mut tx_index : Int
+  mut tx_index : Int32
   // Scratch.
-  res : FixedArray[Int]
+  res : FixedArray[Int32]
   coef : FixedArray[Double]
-  levels : FixedArray[Int]
-  dq : FixedArray[Int]
+  levels : FixedArray[Int32]
+  dq : FixedArray[Int32]
+  quant_ctx : FixedArray[Int32]
 }
 
 ///|
 fn Av1Enc::new(
-  planes : Array[FixedArray[Int]],
-  width : Int,
-  height : Int,
-  qidx : Int,
+  planes : Array[FixedArray[Int32]],
+  width : Int32,
+  height : Int32,
+  qidx : Int32,
 ) -> Av1Enc {
   let num_planes = planes.length()
   let mi_cols = 2 * ((width + 7) >> 3)
@@ -173,8 +176,8 @@ fn Av1Enc::new(
       aw >> ss
     }
   })
-  let src : Array[FixedArray[Int]] = []
-  let rec : Array[FixedArray[Int]] = []
+  let src : Array[FixedArray[Int32]] = []
+  let rec : Array[FixedArray[Int32]] = []
   for p in 0..<num_planes {
     let pw = if p == 0 { width } else { (width + ss) >> ss }
     let ph = if p == 0 { height } else { (height + ss) >> ss }
@@ -220,6 +223,8 @@ fn Av1Enc::new(
     sw: Av1SymWriter::new(),
     edges: Av1Edges::new(),
     dry: false,
+    search_tx: false,
+    lambda: av1_lambda(qidx),
     cost: 0,
     any_nonzero: false,
     mi_row: 0,
@@ -237,12 +242,13 @@ fn Av1Enc::new(
     coef: FixedArray::make(64 * 64, 0.0),
     levels: FixedArray::make(32 * 32, 0),
     dq: FixedArray::make(64 * 64, 0),
+    quant_ctx: FixedArray::make(32 * 32, 0),
   }
 }
 
 ///|
 /// Code a symbol (or, in a dry run, add its cost).
-fn Av1Enc::sym(self : Av1Enc, off : Int, n : Int, s : Int) -> Unit {
+fn Av1Enc::sym(self : Av1Enc, off : Int32, n : Int32, s : Int32) -> Unit {
   if self.dry {
     self.cost += av1_symbol_cost(self.cdf.data, off, s)
   } else {
@@ -251,7 +257,7 @@ fn Av1Enc::sym(self : Av1Enc, off : Int, n : Int, s : Int) -> Unit {
 }
 
 ///|
-fn Av1Enc::literal(self : Av1Enc, v : Int, n : Int) -> Unit {
+fn Av1Enc::literal(self : Av1Enc, v : Int32, n : Int32) -> Unit {
   if self.dry {
     self.cost += 256 * n
   } else {
@@ -260,18 +266,18 @@ fn Av1Enc::literal(self : Av1Enc, v : Int, n : Int) -> Unit {
 }
 
 ///|
-fn Av1Enc::inside(self : Av1Enc, r : Int, c : Int) -> Bool {
+fn Av1Enc::inside(self : Av1Enc, r : Int32, c : Int32) -> Bool {
   r >= 0 && c >= 0 && r < self.mi_rows && c < self.mi_cols
 }
 
 ///|
-fn Av1Enc::dec_idx(plane : Int, y : Int, x : Int) -> Int {
+fn Av1Enc::dec_idx(plane : Int32, y : Int32, x : Int32) -> Int32 {
   plane * 324 + (y + 1) * 18 + (x + 1)
 }
 
 ///|
 /// clear_block_decoded_flags for the superblock at (r, c).
-fn Av1Enc::clear_decoded(self : Av1Enc, r : Int, c : Int) -> Unit {
+fn Av1Enc::clear_decoded(self : Av1Enc, r : Int32, c : Int32) -> Unit {
   let sb4 = 16
   for plane in 0..<self.num_planes {
     let sub = if plane > 0 { self.ss } else { 0 }
@@ -294,7 +300,12 @@ fn Av1Enc::clear_decoded(self : Av1Enc, r : Int, c : Int) -> Unit {
 
 ///|
 /// Partition symbol context for a square block at (r, c).
-fn Av1Enc::partition_ctx(self : Av1Enc, r : Int, c : Int, bs : Int) -> Int {
+fn Av1Enc::partition_ctx(
+  self : Av1Enc,
+  r : Int32,
+  c : Int32,
+  bs : Int32,
+) -> Int32 {
   let bsl = av1_mi_width_log2[bs]
   let above = self.inside(r - 1, c) &&
     av1_mi_width_log2[self.mi_size[(r - 1) * self.mi_cols + c]] < bsl
@@ -305,7 +316,11 @@ fn Av1Enc::partition_ctx(self : Av1Enc, r : Int, c : Int, bs : Int) -> Int {
 
 ///|
 /// (offset, symbols) of the partition CDF for a square block size.
-fn Av1Enc::partition_cdf(self : Av1Enc, bs : Int, ctx : Int) -> (Int, Int) {
+fn Av1Enc::partition_cdf(
+  self : Av1Enc,
+  bs : Int32,
+  ctx : Int32,
+) -> (Int32, Int32) {
   match av1_mi_width_log2[bs] {
     1 => (self.cdf.part8 + ctx * 5, 4)
     2 => (self.cdf.part16 + ctx * 11, 10)
@@ -320,10 +335,10 @@ fn Av1Enc::partition_cdf(self : Av1Enc, bs : Int, ctx : Int) -> (Int, Int) {
 /// split_or_vert form at the frame edges).
 fn Av1Enc::write_partition(
   self : Av1Enc,
-  r : Int,
-  c : Int,
-  bs : Int,
-  partition : Int,
+  r : Int32,
+  c : Int32,
+  bs : Int32,
+  partition : Int32,
   has_rows : Bool,
   has_cols : Bool,
 ) -> Unit {
@@ -335,7 +350,7 @@ fn Av1Enc::write_partition(
   } else if has_cols || has_rows {
     // The probability of "split" gathers the partitions that also split
     // in the missing direction.
-    let p = fn(k : Int) { cdf[off + k] - cdf[off + k - 1] }
+    let p = fn(k : Int32) { cdf[off + k] - cdf[off + k - 1] }
     let mut psum = if has_cols {
       // split_or_horz: VERT, SPLIT, HORZ_A, VERT_A, VERT_B, VERT_4
       p(2) + p(3) + p(4) + p(6) + p(7)
@@ -360,7 +375,7 @@ fn Av1Enc::write_partition(
 
 ///|
 /// Set up the current block's position variables.
-fn Av1Enc::begin_block(self : Av1Enc, r : Int, c : Int, bs : Int) -> Unit {
+fn Av1Enc::begin_block(self : Av1Enc, r : Int32, c : Int32, bs : Int32) -> Unit {
   self.mi_row = r
   self.mi_col = c
   self.bsize = bs
@@ -396,13 +411,13 @@ fn Av1Enc::begin_block(self : Av1Enc, r : Int, c : Int, bs : Int) -> Unit {
 
 ///|
 /// Plane residual size of the current block.
-fn Av1Enc::plane_size(self : Av1Enc, plane : Int) -> Int {
+fn Av1Enc::plane_size(self : Av1Enc, plane : Int32) -> Int32 {
   let sub = if plane > 0 { self.ss } else { 0 }
   av1_subsampled_size[self.bsize * 4 + sub * 2 + sub]
 }
 
 ///|
-fn Av1Enc::plane_tx_size(self : Av1Enc, plane : Int) -> Int {
+fn Av1Enc::plane_tx_size(self : Av1Enc, plane : Int32) -> Int32 {
   if plane == 0 {
     return self.tx_size
   }
@@ -439,15 +454,15 @@ fn Av1Enc::code_block(self : Av1Enc) -> Unit {
   self.sym(self.cdf.skip + sctx * 3, 2, if m.skip { 1 } else { 0 })
   // intra_frame_y_mode
   let am = av1_intra_mode_context[if self.avail_u {
-    self.mi_ymode[(r - 1) * cols + c]
-  } else {
-    0
-  }]
+      self.mi_ymode[(r - 1) * cols + c]
+    } else {
+      0
+    }]
   let lm = av1_intra_mode_context[if self.avail_l {
-    self.mi_ymode[r * cols + c - 1]
-  } else {
-    0
-  }]
+      self.mi_ymode[r * cols + c - 1]
+    } else {
+      0
+    }]
   self.sym(self.cdf.kf_y + (am * 5 + lm) * 14, 13, m.ymode)
   if bs >= av1_block_8x8 && m.ymode >= 1 && m.ymode <= 8 {
     self.sym(self.cdf.angle + (m.ymode - 1) * 8, 7, m.angle_y + 3)
@@ -492,8 +507,8 @@ fn Av1Enc::code_block(self : Av1Enc) -> Unit {
   self.tx_index = 0
   for plane in 0..<(if self.has_chroma { 3 } else { 1 }) {
     let tx = self.plane_tx_size(plane)
-    let step_x = (1 << av1_tx_width_log2[tx]) >> 2
-    let step_y = (1 << av1_tx_height_log2[tx]) >> 2
+    let step_x = 1 << av1_tx_width_log2[tx] >> 2
+    let step_y = 1 << av1_tx_height_log2[tx] >> 2
     let psz = self.plane_size(plane)
     let n4w = av1_bw4(psz)
     let n4h = av1_bh4(psz)
@@ -520,51 +535,118 @@ fn Av1Enc::code_block(self : Av1Enc) -> Unit {
 /// Predict, code and reconstruct one transform block.
 fn Av1Enc::transform_block(
   self : Av1Enc,
-  plane : Int,
-  base_x : Int,
-  base_y : Int,
-  tx : Int,
-  x : Int,
-  y : Int,
+  plane : Int32,
+  base_x : Int32,
+  base_y : Int32,
+  tx : Int32,
+  x : Int32,
+  y : Int32,
 ) -> Unit {
   let start_x = base_x + 4 * x
   let start_y = base_y + 4 * y
   let sub = if plane > 0 { self.ss } else { 0 }
-  let row = (start_y << sub) >> 2
-  let col = (start_x << sub) >> 2
+  let row = start_y << sub >> 2
+  let col = start_x << sub >> 2
   let sb_row = row & 15
   let sb_col = col & 15
   let log2w = av1_tx_width_log2[tx]
   let log2h = av1_tx_height_log2[tx]
-  let step_x = (1 << log2w) >> 2
-  let step_y = (1 << log2h) >> 2
+  let step_x = 1 << log2w >> 2
+  let step_y = 1 << log2h >> 2
   let max_x = (self.mi_cols * 4) >> sub
   let max_y = (self.mi_rows * 4) >> sub
   if start_x >= max_x || start_y >= max_y {
     return
   }
   let m = self.mode
+  let mode = if plane == 0 { m.ymode } else { m.uvmode }
+  let angle = if plane == 0 { m.angle_y } else { m.angle_uv }
+  self.predict_tx(plane, start_x, start_y, tx, x, y, mode, angle)
+  // Transform type.
+  let tx_type = if plane == 0 {
+    if self.search_tx {
+      let t = if av1_tx_set(tx) == 0 || m.skip {
+        0
+      } else {
+        self.choose_tx_type(start_x, start_y, tx)
+      }
+      m.tx_types.push(t)
+      t
+    } else {
+      let t = if self.tx_index < m.tx_types.length() {
+        m.tx_types[self.tx_index]
+      } else {
+        0
+      }
+      self.tx_index += 1
+      if av1_tx_set(tx) == 0 {
+        0
+      } else {
+        t
+      }
+    }
+  } else {
+    let t = av1_mode_to_txfm[m.uvmode]
+    if av1_tx_set(tx) == 0 {
+      0
+    } else {
+      t
+    }
+  }
+  self.code_residual(plane, start_x, start_y, tx, tx_type)
+  for i in 0..<step_y {
+    for j in 0..<step_x {
+      self.decoded[Av1Enc::dec_idx(
+        plane,
+        (sb_row >> sub) + i,
+        (sb_col >> sub) + j,
+      )] = true
+    }
+  }
+}
+
+///|
+/// Intra prediction of one transform block (spec transform_block
+/// availability rules) into the reconstruction.
+fn Av1Enc::predict_tx(
+  self : Av1Enc,
+  plane : Int32,
+  start_x : Int32,
+  start_y : Int32,
+  tx : Int32,
+  x : Int32,
+  y : Int32,
+  mode : Int32,
+  angle : Int32,
+) -> Unit {
+  let sub = if plane > 0 { self.ss } else { 0 }
+  let row = start_y << sub >> 2
+  let col = start_x << sub >> 2
+  let sb_row = row & 15
+  let sb_col = col & 15
+  let log2w = av1_tx_width_log2[tx]
+  let log2h = av1_tx_height_log2[tx]
+  let step_x = 1 << log2w >> 2
+  let step_y = 1 << log2h >> 2
+  let max_x = (self.mi_cols * 4) >> sub
+  let max_y = (self.mi_rows * 4) >> sub
   let have_left = (if plane == 0 { self.avail_l } else { self.avail_lc }) ||
     x > 0
   let have_above = (if plane == 0 { self.avail_u } else { self.avail_uc }) ||
     y > 0
   let have_ar = self.decoded[Av1Enc::dec_idx(
-    plane,
-    (sb_row >> sub) - 1,
-    (sb_col >> sub) + step_x,
-  )]
+      plane,
+      (sb_row >> sub) - 1,
+      (sb_col >> sub) + step_x,
+    )]
   let have_bl = self.decoded[Av1Enc::dec_idx(
-    plane,
-    (sb_row >> sub) + step_y,
-    (sb_col >> sub) - 1,
-  )]
-  let mode = if plane == 0 { m.ymode } else { m.uvmode }
-  let angle = if plane == 0 { m.angle_y } else { m.angle_uv }
-  let buf = self.rec[plane]
-  let stride = self.stride[plane]
+      plane,
+      (sb_row >> sub) + step_y,
+      (sb_col >> sub) - 1,
+    )]
   av1_predict_intra(
-    buf,
-    stride,
+    self.rec[plane],
+    self.stride[plane],
     start_x,
     start_y,
     have_left,
@@ -579,28 +661,20 @@ fn Av1Enc::transform_block(
     max_y - 1,
     self.edges,
   )
-  // Transform type.
-  let tx_type = if plane == 0 {
-    let t = if self.tx_index < m.tx_types.length() {
-      m.tx_types[self.tx_index]
-    } else {
-      0
-    }
-    self.tx_index += 1
-    if av1_tx_set(tx) == 0 {
-      0
-    } else {
-      t
-    }
-  } else {
-    let t = av1_mode_to_txfm[m.uvmode]
-    if av1_tx_set(tx) == 0 {
-      0
-    } else {
-      t
-    }
-  }
-  if !m.skip {
+}
+
+///|
+/// Quantize, code and reconstruct the residual of a predicted transform
+/// block.
+fn Av1Enc::code_residual(
+  self : Av1Enc,
+  plane : Int32,
+  start_x : Int32,
+  start_y : Int32,
+  tx : Int32,
+  tx_type : Int32,
+) -> Unit {
+  if !self.mode.skip {
     let eob = self.quantize(plane, start_x, start_y, tx, tx_type)
     if eob > 0 {
       self.any_nonzero = true
@@ -612,24 +686,125 @@ fn Av1Enc::transform_block(
   } else if plane == 0 {
     self.set_tx_types(start_x >> 2, start_y >> 2, tx, 0)
   }
-  for i in 0..<step_y {
-    for j in 0..<step_x {
-      self.decoded[Av1Enc::dec_idx(plane, (sb_row >> sub) + i, (sb_col >> sub) +
-        j)] = true
+}
+
+///|
+/// Sum of squared differences between source and reconstruction over the
+/// visible part of a plane rectangle.
+fn Av1Enc::sse(
+  self : Av1Enc,
+  plane : Int32,
+  x0 : Int32,
+  y0 : Int32,
+  w : Int32,
+  h : Int32,
+) -> Int32 {
+  let sub = if plane > 0 { self.ss } else { 0 }
+  let pw = (self.width + sub) >> sub
+  let ph = (self.height + sub) >> sub
+  let x1 = if x0 + w < pw { x0 + w } else { pw }
+  let y1 = if y0 + h < ph { y0 + h } else { ph }
+  let st = self.stride[plane]
+  let src = self.src[plane]
+  let rec = self.rec[plane]
+  let mut s = 0
+  for y in y0..<y1 {
+    for x in x0..<x1 {
+      let d = src[y * st + x] - rec[y * st + x]
+      s += d * d
     }
   }
+  s
 }
+
+///|
+/// Pick the luma transform type of a (predicted) transform block by
+/// rate-distortion over the INTRA_2 set; leaves the block unchanged.
+fn Av1Enc::choose_tx_type(
+  self : Av1Enc,
+  start_x : Int32,
+  start_y : Int32,
+  tx : Int32,
+) -> Int32 {
+  let w = 1 << av1_tx_width_log2[tx]
+  let h = 1 << av1_tx_height_log2[tx]
+  let w4 = w >> 2
+  let h4 = h >> 2
+  let x4 = start_x >> 2
+  let y4 = start_y >> 2
+  let st = self.stride[0]
+  let rec = self.rec[0]
+  let pred = FixedArray::make(w * h, 0)
+  for i in 0..<h {
+    for j in 0..<w {
+      pred[i * w + j] = rec[(start_y + i) * st + start_x + j]
+    }
+  }
+  let al = FixedArray::makei(w4, fn(i) { self.above_level[0][x4 + i] })
+  let ad = FixedArray::makei(w4, fn(i) { self.above_dc[0][x4 + i] })
+  let ll = FixedArray::makei(h4, fn(i) { self.left_level[0][y4 + i] })
+  let ld = FixedArray::makei(h4, fn(i) { self.left_dc[0][y4 + i] })
+  let nz = self.any_nonzero
+  let mut best = 0
+  let mut best_j = 1.0e300
+  for t in [0, 3, 1, 2, 9] {
+    let c0 = self.cost
+    let nz0 = self.any_nonzero
+    self.any_nonzero = false
+    self.code_residual(0, start_x, start_y, tx, t)
+    // A residual that quantizes to zero with the DCT is not worth other
+    // transforms.
+    let zero = t == 0 && !self.any_nonzero
+    self.any_nonzero = nz0
+    let j = self.sse(0, start_x, start_y, w, h).to_double() +
+      self.lambda * (self.cost - c0).to_double() / 256.0
+    if j < best_j {
+      best_j = j
+      best = t
+    }
+    // Undo.
+    self.cost = c0
+    self.any_nonzero = nz
+    for i in 0..<h {
+      for jj in 0..<w {
+        rec[(start_y + i) * st + start_x + jj] = pred[i * w + jj]
+      }
+    }
+    for i in 0..<w4 {
+      self.above_level[0][x4 + i] = al[i]
+      self.above_dc[0][x4 + i] = ad[i]
+    }
+    for i in 0..<h4 {
+      self.left_level[0][y4 + i] = ll[i]
+      self.left_dc[0][y4 + i] = ld[i]
+    }
+    if zero {
+      break
+    }
+  }
+  best
+}
+
+///|
+/// Rate-distortion multiplier (per bit, in squared-error units).
+fn av1_lambda(qidx : Int32) -> Double {
+  let q = av1_ac_qlookup[qidx].to_double() / 8.0
+  av1_lambda_scale * q * q
+}
+
+///|
+let av1_lambda_scale : Double = 0.14
 
 ///|
 fn Av1Enc::set_tx_types(
   self : Av1Enc,
-  x4 : Int,
-  y4 : Int,
-  tx : Int,
-  t : Int,
+  x4 : Int32,
+  y4 : Int32,
+  tx : Int32,
+  t : Int32,
 ) -> Unit {
-  let w4 = (1 << av1_tx_width_log2[tx]) >> 2
-  let h4 = (1 << av1_tx_height_log2[tx]) >> 2
+  let w4 = 1 << av1_tx_width_log2[tx] >> 2
+  let h4 = 1 << av1_tx_height_log2[tx] >> 2
   for j in 0..<h4 {
     for i in 0..<w4 {
       if y4 + j < self.mi_rows && x4 + i < self.mi_cols {
@@ -644,12 +819,12 @@ fn Av1Enc::set_tx_types(
 /// transform block into self.levels (pos = row * tw + col); returns eob.
 fn Av1Enc::quantize(
   self : Av1Enc,
-  plane : Int,
-  x0 : Int,
-  y0 : Int,
-  tx : Int,
-  tx_type : Int,
-) -> Int {
+  plane : Int32,
+  x0 : Int32,
+  y0 : Int32,
+  tx : Int32,
+  tx_type : Int32,
+) -> Int32 {
   let w = 1 << av1_tx_width_log2[tx]
   let h = 1 << av1_tx_height_log2[tx]
   let stride = self.stride[plane]
@@ -688,7 +863,7 @@ fn Av1Enc::quantize(
 }
 
 ///|
-fn av1_dq_denom(tx : Int) -> Int {
+fn av1_dq_denom(tx : Int32) -> Int32 {
   match tx {
     3 | 9 | 10 | 17 | 18 => 2
     4 | 11 | 12 => 4
@@ -701,11 +876,11 @@ fn av1_dq_denom(tx : Int) -> Int {
 /// reconstruction (the spec's reconstruct process).
 fn Av1Enc::reconstruct(
   self : Av1Enc,
-  plane : Int,
-  x0 : Int,
-  y0 : Int,
-  tx : Int,
-  tx_type : Int,
+  plane : Int32,
+  x0 : Int32,
+  y0 : Int32,
+  tx : Int32,
+  tx_type : Int32,
 ) -> Unit {
   let w = 1 << av1_tx_width_log2[tx]
   let h = 1 << av1_tx_height_log2[tx]
@@ -750,19 +925,19 @@ fn Av1Enc::reconstruct(
 /// self.levels holds the signed levels, `eob` the end of block.
 fn Av1Enc::coeffs(
   self : Av1Enc,
-  plane : Int,
-  start_x : Int,
-  start_y : Int,
-  tx : Int,
-  tx_type : Int,
-  eob : Int,
+  plane : Int32,
+  start_x : Int32,
+  start_y : Int32,
+  tx : Int32,
+  tx_type : Int32,
+  eob : Int32,
 ) -> Unit {
   let x4 = start_x >> 2
   let y4 = start_y >> 2
   let log2w = av1_tx_width_log2[tx]
   let log2h = av1_tx_height_log2[tx]
-  let w4 = (1 << log2w) >> 2
-  let h4 = (1 << log2h) >> 2
+  let w4 = 1 << log2w >> 2
+  let h4 = 1 << log2h >> 2
   let tx_sz_ctx = (av1_tx_size_sqr[tx] + av1_tx_size_sqr_up[tx] + 1) >> 1
   let ptype = if plane > 0 { 1 } else { 0 }
   let sub = if plane > 0 { self.ss } else { 0 }
@@ -815,7 +990,9 @@ fn Av1Enc::coeffs(
     }
     for i in 0..<h4 {
       if y4 + i < max_y4 {
-        left = left | self.left_level[plane][y4 + i] | self.left_dc[plane][y4 + i]
+        left = left |
+          self.left_level[plane][y4 + i] |
+          self.left_dc[plane][y4 + i]
       }
     }
     let base = 7 +
@@ -830,7 +1007,11 @@ fn Av1Enc::coeffs(
   self.sym(
     cdf.txb_skip + (tx_sz_ctx * 13 + az_ctx) * 3,
     2,
-    if eob == 0 { 1 } else { 0 },
+    if eob == 0 {
+      1
+    } else {
+      0
+    },
   )
   let mut cul_level = 0
   let mut dc_category = 0
@@ -887,7 +1068,10 @@ fn Av1Enc::coeffs(
     let bwl = av1_tx_width_log2[adj]
     let width = 1 << bwl
     let height = 1 << av1_tx_height_log2[adj]
-    let quant = FixedArray::make(width * height, 0)
+    let quant = self.quant_ctx
+    for i in 0..<(width * height) {
+      quant[i] = 0
+    }
     for c = eob - 1; c >= 0; c = c - 1 {
       let pos = scan[c]
       let level = self.levels[pos].abs()
@@ -937,8 +1121,8 @@ fn Av1Enc::coeffs(
         let sign = if v < 0 { 1 } else { 0 }
         if c == 0 {
           self.sym(
-            cdf.dc_sign + (ptype * 3 + self.dc_sign_ctx(plane, x4, y4, w4, h4)) *
-            3,
+            cdf.dc_sign +
+            (ptype * 3 + self.dc_sign_ctx(plane, x4, y4, w4, h4)) * 3,
             2,
             sign,
           )
@@ -974,12 +1158,12 @@ fn Av1Enc::coeffs(
 ///|
 fn Av1Enc::dc_sign_ctx(
   self : Av1Enc,
-  plane : Int,
-  x4 : Int,
-  y4 : Int,
-  w4 : Int,
-  h4 : Int,
-) -> Int {
+  plane : Int32,
+  x4 : Int32,
+  y4 : Int32,
+  w4 : Int32,
+  h4 : Int32,
+) -> Int32 {
   let sub = if plane > 0 { self.ss } else { 0 }
   let max_x4 = self.mi_cols >> sub
   let max_y4 = self.mi_rows >> sub
@@ -1014,9 +1198,9 @@ fn Av1Enc::dc_sign_ctx(
 }
 
 ///|
-fn av1_floor_log2(x : Int) -> Int {
+fn av1_floor_log2(x : Int32) -> Int32 {
   let mut n = 0
-  while (x >> (n + 1)) != 0 {
+  while x >> (n + 1) != 0 {
     n += 1
   }
   n
@@ -1025,13 +1209,13 @@ fn av1_floor_log2(x : Int) -> Int {
 ///|
 /// get_coeff_base_ctx (2-D transform class, not the eob position).
 fn av1_coeff_base_ctx(
-  quant : FixedArray[Int],
-  tx : Int,
-  bwl : Int,
-  width : Int,
-  height : Int,
-  pos : Int,
-) -> Int {
+  quant : FixedArray[Int32],
+  tx : Int32,
+  bwl : Int32,
+  width : Int32,
+  height : Int32,
+  pos : Int32,
+) -> Int32 {
   let row = pos >> bwl
   let col = pos - (row << bwl)
   let mut mag = 0
@@ -1062,12 +1246,12 @@ fn av1_coeff_base_ctx(
 ///|
 /// coeff_br context (2-D transform class).
 fn av1_coeff_br_ctx(
-  quant : FixedArray[Int],
-  bwl : Int,
-  width : Int,
-  height : Int,
-  pos : Int,
-) -> Int {
+  quant : FixedArray[Int32],
+  bwl : Int32,
+  width : Int32,
+  height : Int32,
+  pos : Int32,
+) -> Int32 {
   let row = pos >> bwl
   let col = pos - (row << bwl)
   let mut mag = 0
