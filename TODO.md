@@ -10,7 +10,8 @@
 - [x] BMP decode (palette, RLE, 16/24/32-bit, bit fields) / encode
 - [x] ICO / CUR decode, ICO encode
 - [x] TIFF decode (all pages, strips / tiles, LZW / Deflate / PackBits / JPEG) / encode
-- [x] WebP lossless encode (predictor / palette / subtract-green, LZ77, color cache)
+- [x] WebP lossless encode (predictor / cross-color / palette / subtract-green,
+  cost-based LZ77, color cache, meta prefix codes)
 - [x] AVIF encode (js-target MVP, opaque images)
 - [x] Resize (Nearest / fixed-point Bilinear / Bicubic)
 - [x] Format auto-detect (`decode_image`), stream decode (PNG / BMP)
@@ -30,8 +31,8 @@
   quantizer offsets (either direction) and chroma quantizer deltas were
   tried and lowered PSNR and luma SSIM against a uniform quantizer, so they
   are not used; a perceptual metric beyond PSNR / SSIM would be needed
-- [ ] WebP lossless encoder: cross-color transform, meta prefix codes (histogram
-  clustering), cost-based LZ77 parsing, per-image predictor tile size
+- [ ] WebP lossless encoder: per-image predictor / meta tile sizes, and a
+  faster parse (encoding is ~3x slower than 0.18 for ~8% smaller files)
 - [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)
 
