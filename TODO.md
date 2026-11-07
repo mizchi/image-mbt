@@ -12,7 +12,7 @@
 - [x] TIFF decode (all pages, strips / tiles, LZW / Deflate / PackBits / JPEG) / encode
 - [x] WebP lossless encode (predictor / cross-color / palette / subtract-green,
   cost-based LZ77, color cache, meta prefix codes)
-- [x] AVIF encode (js-target MVP, opaque images)
+- [x] AVIF encode (pure AV1 intra encoder, alpha, all targets)
 - [x] Resize (Nearest / fixed-point Bilinear / Bicubic)
 - [x] Format auto-detect (`decode_image`), stream decode (PNG / BMP)
 - [x] Mutation fuzz test; malformed input raises `DecodeError`
@@ -33,7 +33,10 @@
   are not used; a perceptual metric beyond PSNR / SSIM would be needed
 - [ ] WebP lossless encoder: per-image predictor / meta tile sizes, and a
   faster parse (encoding is ~3x slower than 0.18 for ~8% smaller files)
-- [ ] AVIF full encoder (alpha, non-js targets, no external runtime dependency)
+- [ ] AVIF encoder: multiple tiles (> 4096 wide), palette / intra block copy for
+  screen content, CfL, CDEF, rectangular partitions and 4x4 blocks, transform
+  size selection, speed (64x64: 17 ms native / 51 ms js; 512x512: 1.2 s native /
+  3.5 s js)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)
 
 ## Packaging

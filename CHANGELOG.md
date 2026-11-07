@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.20.0
+
+- `encode_avif(img, quality~ : Int = 75)` is a pure MoonBit AV1 encoder
+  on every target (no browser canvas or `ffmpeg`), with alpha:
+  - AV1 still picture (reduced still-picture header, one key frame,
+    8-bit 4:2:0, BT.601 full range), one tile, default CDFs with adaptation
+  - partitions from 64x64 to 8x8 and intra modes chosen by rate-distortion
+    (SATD pre-selection, then full coding of the best candidates); DCT /
+    ADST / identity transform types (reduced set) per transform block
+  - deblocking filter level from the quantizer
+  - non-opaque alpha as a monochrome auxiliary image (`auxl` / `auxC`)
+  - the encoder's reconstruction is checked to equal dav1d's output, and
+    files are ~5% larger than libavif's (libaom, speed 6) at the same luma
+    PSNR on our test set (screen content more: no palette mode)
+  - limits: 4096 pixels wide, 4096x2304 pixels
+  - speed: 64x64 in 17 ms native / 51 ms js; 512x512 in 1.2 s / 3.5 s
+- `tools/gen_av1_tables.py` extracts the AV1 tables from the spec text
+
 ## 0.19.0
 
 - WebP lossless encoder:
