@@ -6,8 +6,6 @@ import {
 
 options(
   targets: {
-    "avif_encode_js.mbt": [ "js" ],
-    "avif_encode_non_js.mbt": [ "not", "js" ],
     "avif_encode_test.mbt": [ "js" ],
     "jpeg_fdct_scalar.mbt": [ "not", "wasm" ],
     "jpeg_fdct_simd.mbt": [ "wasm" ],
