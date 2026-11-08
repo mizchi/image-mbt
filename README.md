@@ -1,6 +1,6 @@
 # mizchi/image
 
-Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, encode PNG / APNG / JPEG / GIF / BMP / TIFF / WebP (lossy / lossless, still and animated) / ICO / AVIF, resize, and EXIF orientation. Core codecs have no external dependencies except `mizchi/zlib`; the AVIF js-target MVP uses browser AVIF canvas support or local `ffmpeg`.
+Image codec primitives for MoonBit: decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, encode PNG / APNG / JPEG / GIF / BMP / TIFF / WebP (lossy / lossless, still and animated) / ICO / AVIF, resize, and EXIF orientation. Codecs have no external dependencies except `mizchi/zlib`.
 
 All decoded images are normalized to `ImageData` (RGBA8 buffer).
 
@@ -33,7 +33,7 @@ let small = @image.encode_jpeg(resized, quality=75, subsampling=Yuv420)
 let gif = @image.encode_gif(resized) // <= 256 colors, alpha 0/255 only
 let webp = @image.encode_webp(resized) // lossless
 let ico = @image.encode_ico(resized) // single PNG-backed icon, <= 256x256
-let avif = @image.encode_avif(resized) // js target only, opaque images
+let avif = @image.encode_avif(resized, quality=75) // lossy AV1
 
 // Animations: every frame is the composited canvas, with its delay
 let apng = @image.decode_png_frames(png_bytes)
@@ -67,9 +67,9 @@ inspect((info.format, info.width, info.height))
 | ICO / CUR | yes | yes (ICO, PNG payload) | n/a | yes |
 | TIFF | yes (all pages) | yes (RGB / RGBA) | n/a | yes |
 | WebP | yes (lossy / lossless / alpha) | yes (lossy / lossless) | decode / encode | yes |
-| AVIF | no | yes (`js` only) | no | no |
+| AVIF | no | yes (lossy, alpha) | no | no |
 
-All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`. `decode_image_stream` reads rows as they are decoded for PNG and BMP; other formats are decoded first, then emitted row by row.
+All codecs run on every target: `js`, `native`, `wasm` and `wasm-gc`. `decode_image_stream` reads rows as they are decoded for PNG and BMP; other formats are decoded first, then emitted row by row.
 
 ### Details
 
@@ -80,7 +80,7 @@ All codecs except AVIF run on every target: `js`, `native`, `wasm` and `wasm-gc`
 - **ICO / CUR** decode: PNG or BMP (DIB) payloads with the AND mask; `decode_ico` returns the largest image, `decode_ico_all` every image. Encode: one image up to 256x256 with a PNG payload.
 - **TIFF** decode (`decode_tiff` for the first image, `decode_tiff_pages` for every page): little / big endian, strips and tiles, chunky and planar samples, None / LZW / Deflate / PackBits with the horizontal predictor, JPEG (compression 7, with `JPEGTables`; raw components like libtiff, YCbCr converted to RGB), WhiteIsZero / BlackIsZero / RGB / palette / CMYK, 1-16 bits per sample, extra alpha (associated alpha is un-premultiplied).
 - **WebP** decode: lossy (VP8), lossless (VP8L, all transforms, color cache, meta prefix codes), alpha (`ALPH`, raw or lossless, with spatial filters), and animation (`decode_webp_frames`: `ANMF` frames composited like libwebp's `WebPAnimDecoder`, with blending, disposal and the loop count). Output is identical to libwebp (RGBA, fancy upsampling). Encode: lossless (VP8L) with length-limited Huffman codes, a cost-based LZ77 parse, color cache, meta prefix codes and the subtract-green / predictor / cross-color / palette transforms (the smallest of several configurations is kept; on our test set about 6% smaller than libwebp's default lossless mode and on par with its slowest, `-m 6`); `encode_webp_lossy(quality~)` writes VP8 (rate-distortion optimized 4x4 / 16x16 / chroma intra modes, adaptive token probabilities, loop filter; alpha as a lossless, spatially filtered ALPH chunk) with libwebp's quality scale; on our test set files are about 3% smaller than libwebp's at the same PSNR. `encode_webp_animation` writes an animated WebP from an `Animation` (lossless frames cropped to the changed region, no blending).
-- **AVIF** encode: `js` target MVP for opaque images; needs browser AVIF canvas support or a local `ffmpeg`.
+- **AVIF** encode: `encode_avif(quality~)` writes an AV1 still picture (8-bit 4:2:0, BT.601 full range) in pure MoonBit: rate-distortion optimized partitions (64x64 down to 8x8), all 13 intra modes, the DCT / ADST / identity transform types and the deblocking filter. Non-opaque alpha is stored as a monochrome auxiliary image. The quality scale follows libavif's; on our test set files are about 5% larger than libavif's (libaom, speed 6) at the same luma PSNR, except screen content (palette mode is not used). Up to 4096 pixels wide and 4096x2304 pixels (one tile). The reconstruction is checked to be identical to dav1d's decode.
 - **Resize**: Nearest, and fixed-point separable Bilinear / Bicubic.
 - **EXIF orientation**: `read_exif_orientation` reads the tag from JPEG, PNG (`eXIf`), TIFF and WebP (`EXIF`); `apply_orientation` applies it with the same mapping as Pillow's `exif_transpose`; `decode_image_upright` does both.
 
@@ -146,7 +146,7 @@ pub fn decode_webp_frames(Bytes) -> Animation raise DecodeError
 pub fn encode_webp(ImageData) -> Bytes raise EncodeError // lossless
 pub fn encode_webp_lossy(ImageData, quality? : Int = 75) -> Bytes raise EncodeError
 pub fn encode_webp_animation(Animation) -> Bytes raise EncodeError
-pub fn encode_avif(ImageData) -> Bytes raise EncodeError
+pub fn encode_avif(ImageData, quality? : Int) -> Bytes raise EncodeError
 
 // Resize / orientation
 pub fn resize(ImageData, Int, Int, ResizeMethod) -> ImageData raise EncodeError
