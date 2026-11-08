@@ -131,6 +131,7 @@ priv struct Av1Enc {
   edges : Av1Edges
   mut dry : Bool
   mut search_tx : Bool
+  mut ready_eob : Int32
   lambda : Double
   mut cost : Int32
   mut any_nonzero : Bool
@@ -152,6 +153,8 @@ priv struct Av1Enc {
   levels : FixedArray[Int32]
   dq : FixedArray[Int32]
   quant_ctx : FixedArray[Int32]
+  tx_ctx_save : FixedArray[Int32]
+  best_levels : FixedArray[Int32]
 }
 
 ///|
@@ -224,6 +227,7 @@ fn Av1Enc::new(
     edges: Av1Edges::new(),
     dry: false,
     search_tx: false,
+    ready_eob: -1,
     lambda: av1_lambda(qidx),
     cost: 0,
     any_nonzero: false,
@@ -243,6 +247,8 @@ fn Av1Enc::new(
     levels: FixedArray::make(32 * 32, 0),
     dq: FixedArray::make(64 * 64, 0),
     quant_ctx: FixedArray::make(32 * 32, 0),
+    tx_ctx_save: FixedArray::make(64, 0),
+    best_levels: FixedArray::make(32 * 32, 0),
   }
 }
 
@@ -675,7 +681,14 @@ fn Av1Enc::code_residual(
   tx_type : Int32,
 ) -> Unit {
   if !self.mode.skip {
-    let eob = self.quantize(plane, start_x, start_y, tx, tx_type)
+    // The transform type search leaves the chosen levels ready.
+    let eob = if self.ready_eob >= 0 {
+      let e = self.ready_eob
+      self.ready_eob = -1
+      e
+    } else {
+      self.quantize(plane, start_x, start_y, tx, tx_type)
+    }
     if eob > 0 {
       self.any_nonzero = true
     }
@@ -732,57 +745,125 @@ fn Av1Enc::choose_tx_type(
   let h4 = h >> 2
   let x4 = start_x >> 2
   let y4 = start_y >> 2
-  let st = self.stride[0]
-  let rec = self.rec[0]
-  let pred = FixedArray::make(w * h, 0)
-  for i in 0..<h {
-    for j in 0..<w {
-      pred[i * w + j] = rec[(start_y + i) * st + start_x + j]
-    }
+  let tw = if w > 32 { 32 } else { w }
+  let th = if h > 32 { 32 } else { h }
+  // Saved contexts and the best levels (scratch buffers).
+  let al = self.tx_ctx_save
+  for i in 0..<w4 {
+    al[i] = self.above_level[0][x4 + i]
+    al[16 + i] = self.above_dc[0][x4 + i]
   }
-  let al = FixedArray::makei(w4, fn(i) { self.above_level[0][x4 + i] })
-  let ad = FixedArray::makei(w4, fn(i) { self.above_dc[0][x4 + i] })
-  let ll = FixedArray::makei(h4, fn(i) { self.left_level[0][y4 + i] })
-  let ld = FixedArray::makei(h4, fn(i) { self.left_dc[0][y4 + i] })
-  let nz = self.any_nonzero
+  for i in 0..<h4 {
+    al[32 + i] = self.left_level[0][y4 + i]
+    al[48 + i] = self.left_dc[0][y4 + i]
+  }
+  let best_levels = self.best_levels
   let mut best = 0
+  let mut best_eob = 0
   let mut best_j = 1.0e300
+  // Each type is scored without reconstructing: the distortion comes from
+  // the quantization error in the transform domain, the rate from the
+  // coefficient coder.
+  av1_row_cache_on()
   for t in [0, 3, 1, 2, 9] {
     let c0 = self.cost
-    let nz0 = self.any_nonzero
-    self.any_nonzero = false
-    self.code_residual(0, start_x, start_y, tx, t)
-    // A residual that quantizes to zero with the DCT is not worth other
-    // transforms.
-    let zero = t == 0 && !self.any_nonzero
-    self.any_nonzero = nz0
-    let j = self.sse(0, start_x, start_y, w, h).to_double() +
-      self.lambda * (self.cost - c0).to_double() / 256.0
+    let eob = self.quantize(0, start_x, start_y, tx, t)
+    let d = self.coef_distortion(tx, t)
+    self.coeffs(0, start_x, start_y, tx, t, eob)
+    let j = d + self.lambda * (self.cost - c0).to_double() / 256.0
     if j < best_j {
       best_j = j
       best = t
-    }
-    // Undo.
-    self.cost = c0
-    self.any_nonzero = nz
-    for i in 0..<h {
-      for jj in 0..<w {
-        rec[(start_y + i) * st + start_x + jj] = pred[i * w + jj]
+      best_eob = eob
+      for i in 0..<(tw * th) {
+        best_levels[i] = self.levels[i]
       }
     }
+    // Undo the coder state.
+    self.cost = c0
     for i in 0..<w4 {
       self.above_level[0][x4 + i] = al[i]
-      self.above_dc[0][x4 + i] = ad[i]
+      self.above_dc[0][x4 + i] = al[16 + i]
     }
     for i in 0..<h4 {
-      self.left_level[0][y4 + i] = ll[i]
-      self.left_dc[0][y4 + i] = ld[i]
+      self.left_level[0][y4 + i] = al[32 + i]
+      self.left_dc[0][y4 + i] = al[48 + i]
     }
-    if zero {
+    // A residual that quantizes to zero with the DCT is not worth other
+    // transforms.
+    if t == 0 && eob == 0 {
       break
     }
   }
+  av1_row_cache_off()
+  for i in 0..<(tw * th) {
+    self.levels[i] = best_levels[i]
+  }
+  self.ready_eob = best_eob
   best
+}
+
+///|
+/// Squared error (in pixels) of the quantized coefficients, estimated in
+/// the transform domain.
+fn Av1Enc::coef_distortion(
+  self : Av1Enc,
+  tx : Int32,
+  tx_type : Int32,
+) -> Double {
+  let w = 1 << av1_tx_width_log2[tx]
+  let h = 1 << av1_tx_height_log2[tx]
+  let tw = if w > 32 { 32 } else { w }
+  let th = if h > 32 { 32 } else { h }
+  let denom = av1_dq_denom(tx)
+  let mut s = 0.0
+  for i in 0..<th {
+    for j in 0..<tw {
+      let l = self.levels[i * tw + j]
+      let q = if i == 0 && j == 0 { self.dcq } else { self.acq }
+      let mag = ((l * q).abs() & 0xFFFFFF) / denom
+      let dq = if l < 0 { -mag } else { mag }
+      let e = self.coef[i * w + j] - dq.to_double()
+      s = s + e * e
+    }
+  }
+  s * av1_coef_gain(tx, tx_type)
+}
+
+///|
+let av1_coef_gains : FixedArray[Double] = FixedArray::make(19 * 16, -1.0)
+
+///|
+/// Pixel energy per coefficient energy of a transform (measured once on a
+/// pseudo-random residual).
+fn av1_coef_gain(tx : Int32, tx_type : Int32) -> Double {
+  let k = tx * 16 + tx_type
+  if av1_coef_gains[k] >= 0.0 {
+    return av1_coef_gains[k]
+  }
+  let w = 1 << av1_tx_width_log2[tx]
+  let h = 1 << av1_tx_height_log2[tx]
+  let res = FixedArray::make(w * h, 0)
+  let mut seed = 1U
+  let mut pe = 0.0
+  for i in 0..<(w * h) {
+    seed = seed * 1103515245U + 12345U
+    res[i] = ((seed >> 16) % 201U).reinterpret_as_int() - 100
+    pe = pe + (res[i] * res[i]).to_double()
+  }
+  let coef = FixedArray::make(w * h, 0.0)
+  // Measured outside any row cache (the cache holds the block's residual).
+  let cached = av1_row_cache.enabled
+  av1_row_cache.enabled = false
+  av1_forward_2d(res, tx, tx_type, coef)
+  av1_row_cache.enabled = cached
+  let mut ce = 0.0
+  for i in 0..<(w * h) {
+    ce = ce + coef[i] * coef[i]
+  }
+  let g = pe / ce
+  av1_coef_gains[k] = g
+  g
 }
 
 ///|
@@ -839,27 +920,52 @@ fn Av1Enc::quantize(
   av1_forward_2d(self.res, tx, tx_type, self.coef)
   let tw = if w > 32 { 32 } else { w }
   let th = if h > 32 { 32 } else { h }
-  let denom = av1_dq_denom(tx)
+  let denom = av1_dq_denom(tx).to_double()
+  let inv_dc = denom / self.dcq.to_double()
+  let inv_ac = denom / self.acq.to_double()
+  // |coefficient| * inv_ac below this quantizes to zero.
+  let zero_ac = 1.0 - av1_round_ac
+  let iscan = av1_iscan_for(tx)
+  let mut eob = 0
   for i in 0..<th {
     for j in 0..<tw {
-      let q = if i == 0 && j == 0 { self.dcq } else { self.acq }
       let v = self.coef[i * w + j]
-      let a = v.abs() * denom.to_double() / q.to_double()
-      let rnd = if i == 0 && j == 0 { 0.5 } else { 0.4 }
-      let l = (a + rnd).to_int()
+      let pos = i * tw + j
+      let dc = i == 0 && j == 0
+      let a = v.abs() * (if dc { inv_dc } else { inv_ac })
+      if !dc && a < zero_ac {
+        self.levels[pos] = 0
+        continue
+      }
+      let l = (a + (if dc { 0.5 } else { av1_round_ac })).to_int()
       let l = if l > 0xFFFF { 0xFFFF } else { l }
-      self.levels[i * tw + j] = if v < 0.0 { -l } else { l }
-    }
-  }
-  let scan = av1_scan_for(tx)
-  let n = tw * th
-  let mut eob = 0
-  for c in 0..<n {
-    if self.levels[scan[c]] != 0 {
-      eob = c + 1
+      self.levels[pos] = if v < 0.0 { -l } else { l }
+      if l != 0 && iscan[pos] >= eob {
+        eob = iscan[pos] + 1
+      }
     }
   }
   eob
+}
+
+///|
+/// Rounding offset of the AC quantizer (0.5 is plain rounding).
+let av1_round_ac : Double = 0.4
+
+///|
+/// Inverse scans (position -> scan index), per transform size.
+let av1_iscans : FixedArray[FixedArray[Int32]] = FixedArray::makei(19, fn(tx) {
+  let scan = av1_scan_for(tx)
+  let inv = FixedArray::make(scan.length(), 0)
+  for c in 0..<scan.length() {
+    inv[scan[c]] = c
+  }
+  inv
+})
+
+///|
+fn av1_iscan_for(tx : Int32) -> FixedArray[Int32] {
+  av1_iscans[tx]
 }
 
 ///|
@@ -887,8 +993,10 @@ fn Av1Enc::reconstruct(
   let tw = if w > 32 { 32 } else { w }
   let th = if h > 32 { 32 } else { h }
   let denom = av1_dq_denom(tx)
-  for i in 0..<(w * h) {
-    self.dq[i] = 0
+  for i in 0..<th {
+    for j in 0..<tw {
+      self.dq[i * w + j] = 0
+    }
   }
   for i in 0..<th {
     for j in 0..<tw {
@@ -909,7 +1017,15 @@ fn Av1Enc::reconstruct(
       }
     }
   }
-  av1_inverse_2d(self.dq, tx, tx_type, self.res)
+  let mut rows = 0
+  for i in 0..<th {
+    for j in 0..<tw {
+      if self.levels[i * tw + j] != 0 {
+        rows = i + 1
+      }
+    }
+  }
+  av1_inverse_2d(self.dq, tx, tx_type, self.res, rows~)
   let stride = self.stride[plane]
   let rec = self.rec[plane]
   for i in 0..<h {

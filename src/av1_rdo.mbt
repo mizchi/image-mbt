@@ -178,7 +178,12 @@ fn Av1Enc::block_rd(
     let cy = (r >> self.ss) * 4
     let cfl_ok = (if bw > bh { bw } else { bh }) <= 32
     let mut best_s = 1.0e300
-    for mode in 0..<13 {
+    // The best luma mode and the common chroma modes.
+    let uv_modes = [ctx_mode, 0, 9, 1, 2, 12]
+    for k, mode in uv_modes {
+      if k > 0 && mode == ctx_mode {
+        continue
+      }
       let directional = mode >= 1 && mode <= 8
       self.predict_tx(1, cx, cy, ctx_tx, 0, 0, mode, 0)
       self.predict_tx(2, cx, cy, ctx_tx, 0, 0, mode, 0)
@@ -208,11 +213,8 @@ fn Av1Enc::block_rd(
   let mut best = Av1BlockMode::new()
   // State after the best trial (so it need not be coded again).
   let mut best_state : Av1Snap? = None
-  let k = if cands.length() < av1_mode_candidates {
-    cands.length()
-  } else {
-    av1_mode_candidates
-  }
+  let kmax = av1_mode_candidates
+  let k = if cands.length() < kmax { cands.length() } else { kmax }
   for i in 0..<k {
     let (_, mode, a) = cands[i]
     self.restore(snap)

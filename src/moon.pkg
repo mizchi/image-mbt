@@ -2,7 +2,6 @@ import {
   "mizchi/zlib",
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
-  "moonbitlang/core/math",
 }
 
 options(

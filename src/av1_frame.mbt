@@ -13,6 +13,7 @@ priv struct Av1Snap {
   left_dc : Array[FixedArray[Int32]]
   ctx_rect : FixedArray[Int32] // per plane: ax0, ax1, ly0, ly1
   decoded : FixedArray[Bool]
+  dec_rect : FixedArray[Int32] // per plane: x0, y0, w, h (superblock 4x4 units)
   mi : Array[FixedArray[Int32]] // size, ymode, uvmode, skip, tx_types
   mi_rect : FixedArray[Int32] // r0, c0, r1, c1
 }
@@ -23,6 +24,8 @@ fn Av1Enc::snapshot(self : Av1Enc, r : Int32, c : Int32, bs : Int32) -> Av1Snap 
   let bh4 = av1_bh4(bs)
   let rect = FixedArray::make(12, 0)
   let ctx_rect = FixedArray::make(12, 0)
+  let dec_rect = FixedArray::make(12, 0)
+  let dec : Array[Bool] = []
   let rec : Array[FixedArray[Int32]] = []
   let al : Array[FixedArray[Int32]] = []
   let ad : Array[FixedArray[Int32]] = []
@@ -36,6 +39,20 @@ fn Av1Enc::snapshot(self : Av1Enc, r : Int32, c : Int32, bs : Int32) -> Av1Snap 
     let r0 = r >> sub << sub
     let c1 = (c + bw4 + sub) >> sub << sub
     let r1 = (r + bh4 + sub) >> sub << sub
+    // BlockDecoded flags the block can set.
+    let dx0 = (c0 & 15) >> sub
+    let dy0 = (r0 & 15) >> sub
+    let dw = (c1 - c0) >> sub
+    let dh = (r1 - r0) >> sub
+    dec_rect[p * 4] = dx0
+    dec_rect[p * 4 + 1] = dy0
+    dec_rect[p * 4 + 2] = dw
+    dec_rect[p * 4 + 3] = dh
+    for y in 0..<dh {
+      for x in 0..<dw {
+        dec.push(self.decoded[Av1Enc::dec_idx(p, dy0 + y, dx0 + x)])
+      }
+    }
     let x0 = (c0 * 4) >> sub
     let y0 = (r0 * 4) >> sub
     let x1 = (c1 * 4) >> sub
@@ -114,7 +131,8 @@ fn Av1Enc::snapshot(self : Av1Enc, r : Int32, c : Int32, bs : Int32) -> Av1Snap 
     left_level: ll,
     left_dc: ld,
     ctx_rect,
-    decoded: FixedArray::makei(self.decoded.length(), fn(i) { self.decoded[i] }),
+    decoded: FixedArray::makei(dec.length(), fn(i) { dec[i] }),
+    dec_rect,
     mi,
     mi_rect: [r0, c0, r1, c1],
   }
@@ -148,8 +166,16 @@ fn Av1Enc::restore(self : Av1Enc, s : Av1Snap) -> Unit {
       self.left_dc[p][i] = s.left_dc[p][i - ly0]
     }
   }
-  for i in 0..<s.decoded.length() {
-    self.decoded[i] = s.decoded[i]
+  let mut k = 0
+  for p in 0..<self.num_planes {
+    let dx0 = s.dec_rect[p * 4]
+    let dy0 = s.dec_rect[p * 4 + 1]
+    for y in 0..<s.dec_rect[p * 4 + 3] {
+      for x in 0..<s.dec_rect[p * 4 + 2] {
+        self.decoded[Av1Enc::dec_idx(p, dy0 + y, dx0 + x)] = s.decoded[k]
+        k += 1
+      }
+    }
   }
   let r0 = s.mi_rect[0]
   let c0 = s.mi_rect[1]

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.20.1
+
+- `encode_avif` is ~1.7-2x faster with the same compression (64x64: 17 ->
+  ~10 ms native, 51 -> 34 ms js, 56 -> 32 ms wasm; 512x512: 1.12 -> 0.55 s
+  native, 3.7 -> 2.1 s js):
+  - forward DCT / ADST are generated straight-line code: the decoder's
+    butterfly networks transposed (tools/gen_av1_fwd.py)
+  - transform types are scored in the transform domain and only the chosen
+    one is reconstructed; row transforms are shared between the types
+  - zero coefficient rows skip the inverse row transform; snapshots cover
+    only the block's decoded-flag region; fewer allocations
+  - chroma modes are pre-selected among the best luma mode and the five
+    common ones
+
 ## 0.20.0
 
 - `encode_avif(img, quality~ : Int = 75)` is a pure MoonBit AV1 encoder
