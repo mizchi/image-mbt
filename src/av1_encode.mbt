@@ -153,6 +153,8 @@ priv struct Av1Enc {
   levels : FixedArray[Int32]
   dq : FixedArray[Int32]
   quant_ctx : FixedArray[Int32]
+  tx_ctx_save : FixedArray[Int32]
+  best_levels : FixedArray[Int32]
 }
 
 ///|
@@ -245,6 +247,8 @@ fn Av1Enc::new(
     levels: FixedArray::make(32 * 32, 0),
     dq: FixedArray::make(64 * 64, 0),
     quant_ctx: FixedArray::make(32 * 32, 0),
+    tx_ctx_save: FixedArray::make(64, 0),
+    best_levels: FixedArray::make(32 * 32, 0),
   }
 }
 
@@ -743,11 +747,17 @@ fn Av1Enc::choose_tx_type(
   let y4 = start_y >> 2
   let tw = if w > 32 { 32 } else { w }
   let th = if h > 32 { 32 } else { h }
-  let al = FixedArray::makei(w4, fn(i) { self.above_level[0][x4 + i] })
-  let ad = FixedArray::makei(w4, fn(i) { self.above_dc[0][x4 + i] })
-  let ll = FixedArray::makei(h4, fn(i) { self.left_level[0][y4 + i] })
-  let ld = FixedArray::makei(h4, fn(i) { self.left_dc[0][y4 + i] })
-  let best_levels = FixedArray::make(tw * th, 0)
+  // Saved contexts and the best levels (scratch buffers).
+  let al = self.tx_ctx_save
+  for i in 0..<w4 {
+    al[i] = self.above_level[0][x4 + i]
+    al[16 + i] = self.above_dc[0][x4 + i]
+  }
+  for i in 0..<h4 {
+    al[32 + i] = self.left_level[0][y4 + i]
+    al[48 + i] = self.left_dc[0][y4 + i]
+  }
+  let best_levels = self.best_levels
   let mut best = 0
   let mut best_eob = 0
   let mut best_j = 1.0e300
@@ -773,11 +783,11 @@ fn Av1Enc::choose_tx_type(
     self.cost = c0
     for i in 0..<w4 {
       self.above_level[0][x4 + i] = al[i]
-      self.above_dc[0][x4 + i] = ad[i]
+      self.above_dc[0][x4 + i] = al[16 + i]
     }
     for i in 0..<h4 {
-      self.left_level[0][y4 + i] = ll[i]
-      self.left_dc[0][y4 + i] = ld[i]
+      self.left_level[0][y4 + i] = al[32 + i]
+      self.left_dc[0][y4 + i] = al[48 + i]
     }
     // A residual that quantizes to zero with the DCT is not worth other
     // transforms.

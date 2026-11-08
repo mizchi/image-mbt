@@ -36,7 +36,7 @@
 - [ ] AVIF encoder: multiple tiles (> 4096 wide), palette / intra block copy for
   screen content, CfL, CDEF, rectangular partitions and 4x4 blocks, transform
   size selection, the full intra transform set (V_DCT / H_DCT), speed (64x64:
-  10 ms native / 39 ms js; 512x512: 0.7 s native / 2.8 s js)
+  10 ms native / 34 ms js; 512x512: 0.55 s native / 2.1 s js)
 - [ ] Metadata handling policy (gamma / sRGB / ICC)
 
 ## Packaging

@@ -660,12 +660,19 @@ fn av1_fwd_1d(
   y : FixedArray[Double],
 ) -> Unit {
   let len = 1 << n
-  if kind == 0 && n >= 4 {
-    av1_dct2(x, 0, len, y, 0, av1_dct_scratch, 0)
-    let sc = av1_dct_scale(n)
-    for k in 0..<len {
-      y[k] = y[k] * sc[k]
+  if kind == 0 {
+    // Generated transposed networks (av1_fwd_gen.mbt).
+    match n {
+      2 => av1_fdct4(x, y)
+      3 => av1_fdct8(x, y)
+      4 => av1_fdct16(x, y)
+      5 => av1_fdct32(x, y)
+      _ => av1_fdct64(x, y)
     }
+  } else if kind == 1 && n == 3 {
+    av1_fadst8(x, y)
+  } else if kind == 1 && n == 4 {
+    av1_fadst16(x, y)
   } else if kind == 2 {
     // Identity: invert the decoder's scaling.
     let f = match n {
@@ -685,118 +692,6 @@ fn av1_fwd_1d(
         s = s + m[k * len + j] * x[j]
       }
       y[k] = s
-    }
-  }
-}
-
-///|
-let av1_dct_scratch : FixedArray[Double] = FixedArray::make(512, 0.0)
-
-///|
-/// Unnormalized DCT-II y[k] = sum x[n] cos(pi (2n + 1) k / 2N) of
-/// x[off ..< off + len], by the even / odd decomposition.
-fn av1_dct2(
-  x : FixedArray[Double],
-  off : Int32,
-  len : Int32,
-  y : FixedArray[Double],
-  yoff : Int32,
-  sc : FixedArray[Double],
-  soff : Int32,
-) -> Unit {
-  if len == 1 {
-    y[yoff] = x[off]
-    return
-  }
-  let half = len >> 1
-  for i in 0..<half {
-    let a = x[off + i]
-    let b = x[off + len - 1 - i]
-    sc[soff + i] = a + b
-    sc[soff + half + i] = a - b
-  }
-  // Even outputs: DCT of the sums (written after the odd values).
-  av1_dct2(sc, soff, half, sc, soff + len, sc, soff + len + half)
-  for k in 0..<half {
-    y[yoff + 2 * k] = sc[soff + len + k]
-  }
-  // Odd outputs from the differences.
-  let tab = av1_dct_odd(len)
-  for k in 0..<half {
-    let mut s = 0.0
-    let to = k * half
-    for i in 0..<half {
-      s = s + tab[to + i] * sc[soff + half + i]
-    }
-    y[yoff + 2 * k + 1] = s
-  }
-}
-
-///|
-let av1_dct_odd_tabs : Array[FixedArray[Double]?] = Array::make(8, None)
-
-///|
-/// cos(pi (2i + 1)(2k + 1) / 2N) for k, i < N / 2.
-fn av1_dct_odd(len : Int32) -> FixedArray[Double] {
-  let n = av1_floor_log2(len)
-  match av1_dct_odd_tabs[n] {
-    Some(t) => t
-    None => {
-      let half = len >> 1
-      let pi = 3.141592653589793
-      let t = FixedArray::makei(half * half, fn(idx) {
-        let k = idx / half
-        let i = idx % half
-        @math.cos(
-          (2 * i + 1).to_double() *
-          (2 * k + 1).to_double() *
-          pi /
-          (2 * len).to_double(),
-        )
-      })
-      av1_dct_odd_tabs[n] = Some(t)
-      t
-    }
-  }
-}
-
-///|
-let av1_dct_scales : Array[FixedArray[Double]?] = Array::make(8, None)
-
-///|
-/// Per-output scale turning the unnormalized DCT-II into the inverse of the
-/// decoder's DCT: the decoder computes x[n] = sum_k w[k] X[k] cos(..), with
-/// w[k] measured from its integer implementation.
-fn av1_dct_scale(n : Int32) -> FixedArray[Double] {
-  match av1_dct_scales[n] {
-    Some(s) => s
-    None => {
-      let len = 1 << n
-      let pi = 3.141592653589793
-      let amp = 1 << 10
-      let t = FixedArray::make(64, 0)
-      let sc = FixedArray::make(len, 0.0)
-      for k in 0..<len {
-        for i in 0..<len {
-          t[i] = if i == k { amp } else { 0 }
-        }
-        av1_inv_dct(t, n, 20)
-        // Least-squares fit of the column to cos(pi (2i + 1) k / 2N).
-        let mut num = 0.0
-        let mut den = 0.0
-        for i in 0..<len {
-          let c = @math.cos(
-            (2 * i + 1).to_double() * k.to_double() * pi / (2 * len).to_double(),
-          )
-          num = num + t[i].to_double() / amp.to_double() * c
-          den = den + c * c
-        }
-        let wk = num / den
-        let e = if k == 0 { 0.5 } else { 1.0 }
-        sc[k] = 2.0 / len.to_double() * e / wk
-      }
-      av1_dct_scales[n] = Some(sc)
-      sc
     }
   }
 }
