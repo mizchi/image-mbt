@@ -1,6 +1,25 @@
 # Changelog
 
-## 0.20.1
+## 0.5.0
+
+- First published update after 0.4.3, consolidating the unpublished
+  development versions 0.5.0 through 0.20.1 listed below.
+- Decode PNG / APNG / JPEG / GIF / BMP / ICO / TIFF / WebP, including
+  progressive JPEG, animated GIF / WebP, and multi-page TIFF.
+- Add APNG / GIF / WebP animation encoding, TIFF encoding, EXIF orientation
+  handling, and PNG color-mode / compression options.
+- Encode AVIF with a pure MoonBit AV1 encoder on every target, including
+  alpha, rate-distortion optimized coding, and faster transforms.
+- Improve JPEG and WebP compatibility with libjpeg / libwebp, compression,
+  decoding performance, malformed-input handling, and wasm SIMD kernels.
+- Support the current MoonBit toolchain and use `mizchi/zlib` 0.4.10.
+
+## Unpublished development history
+
+These version numbers tracked development and were not published to Mooncakes.
+Their changes are included in the public 0.5.0 release above.
+
+### 0.20.1 (development version)
 
 - `encode_avif` is ~1.7-2x faster with the same compression (64x64: 17 ->
   ~10 ms native, 51 -> 34 ms js, 56 -> 32 ms wasm; 512x512: 1.12 -> 0.55 s
@@ -14,7 +33,7 @@
   - chroma modes are pre-selected among the best luma mode and the five
     common ones
 
-## 0.20.0
+### 0.20.0 (development version)
 
 - `encode_avif(img, quality~ : Int = 75)` is a pure MoonBit AV1 encoder
   on every target (no browser canvas or `ffmpeg`), with alpha:
@@ -32,7 +51,7 @@
   - speed: 64x64 in 17 ms native / 51 ms js; 512x512 in 1.2 s / 3.5 s
 - `tools/gen_av1_tables.py` extracts the AV1 tables from the spec text
 
-## 0.19.0
+### 0.19.0 (development version)
 
 - WebP lossless encoder:
   - cost-based LZ77: a shortest-path parse over literals, cache hits and
@@ -45,7 +64,7 @@
   x0.941 on our test set; vs `-m 6`: x1.077 -> x0.995); encoding is ~2.3-3.5x
   slower (64x64: 5.1 ms native, 20.6 ms js, 16.6 ms wasm)
 
-## 0.18.0
+### 0.18.0 (development version)
 
 - WebP lossless encoder: LZ77 also tries the 24 nearest 2-D distance
   codes and uses lazy matching; predictor modes are chosen by the bits of
@@ -54,14 +73,14 @@
   libwebp's default lossless mode: x1.070 -> x1.019 on our test set);
   encoding is ~2x slower (64x64: 2.2 ms native, 5.9 ms js)
 
-## 0.17.1
+### 0.17.1 (development version)
 
 - `encode_webp_lossy` is ~35% faster with identical output (no full-buffer
   clears per 4x4 trial, a zero-level fast path in the quantizer, table-
   driven probability-update costs). 64x64: 0.86 -> 0.54 ms native,
   2.6 -> 1.9 ms js
 
-## 0.17.0
+### 0.17.0 (development version)
 
 - `encode_webp_lossy`: rate-distortion optimized mode decisions (each
   candidate is quantized and reconstructed, scored as SSE + lambda * token
@@ -71,12 +90,12 @@
   0.16 (now ~3% smaller than libwebp's on the test set); encoding is ~3x
   slower (64x64: 0.86 ms native, 2.6 ms js)
 
-## 0.16.1
+### 0.16.1 (development version)
 
 - wasm: SIMD VP8 loop filter (16 lanes, identical output); lossy WebP
   decode is ~30% faster on the `wasm` target
 
-## 0.16.0
+### 0.16.0 (development version)
 
 - `encode_webp_lossy(img, quality~ : Int = 75)`: lossy WebP (VP8 key frame)
   with per-macroblock 16x16 / 4x4 intra mode decisions, adaptive token
@@ -85,14 +104,14 @@
 - VP8L encoder: predictor candidates without subtract-green (smaller
   single-channel images such as alpha planes)
 
-## 0.15.0
+### 0.15.0 (development version)
 
 - TIFF: `decode_tiff_pages` (every image in the IFD chain), JPEG-compressed
   TIFF (compression 7 with `JPEGTables`; RGB / YCbCr / gray / CMYK), and
   `encode_tiff` (RGB or RGBA, None / LZW / Deflate / PackBits, horizontal
   predictor for LZW and Deflate)
 
-## 0.14.0
+### 0.14.0 (development version)
 
 - `encode_webp_animation`: animated WebP from an `Animation` (lossless
   frames cropped to the changed region; delays in ms, loop count = `plays`)
@@ -108,7 +127,7 @@
 - WebP lossless decode is ~3x faster on the js target (32-bit bit reader)
 - CI: cached static ffmpeg / ffprobe for the js AVIF tests; actions v5
 
-## 0.13.0
+### 0.13.0 (development version)
 
 - WebP decode: `decode_webp` and `decode_webp_frames` (lossy VP8,
   lossless VP8L, `ALPH` alpha, animation). Output is identical to libwebp
@@ -116,7 +135,7 @@
   `decode_image`, `detect_image_format`, `decode_image_stream` and
   `read_exif_orientation` (`EXIF` chunk) accept WebP
 
-## 0.12.0
+### 0.12.0 (development version)
 
 Breaking changes:
 
@@ -131,7 +150,7 @@ Other changes:
 - `decode_image_stream` accepts every format (PNG and BMP are streamed,
   others are decoded and then emitted row by row)
 
-## 0.11.0
+### 0.11.0 (development version)
 
 - EXIF orientation: `read_exif_orientation` (JPEG / PNG / TIFF),
   `apply_orientation` (same mapping as Pillow's `exif_transpose`) and
@@ -147,7 +166,7 @@ Other changes:
   the size the header implies
 - CI: timeouts for the ffmpeg install step and the job
 
-## 0.10.0
+### 0.10.0 (development version)
 
 - APNG decode: `decode_png_frames` returns an `Animation` (composited RGBA
   frames with delays, and the play count) using acTL / fcTL / fdAT, frame
@@ -161,7 +180,7 @@ Other changes:
 - `decode_image` also detects TIFF
 - New generic `Animation` / `AnimationFrame` types
 
-## 0.9.0
+### 0.9.0 (development version)
 
 - `encode_jpeg` follows libjpeg's compression pipeline: fixed-point
   RGB -> YCbCr, libjpeg's chroma downsampling, the islow integer FDCT with
@@ -175,7 +194,7 @@ Other changes:
   11.7 -> 8.1 ms, wasm 8.2 -> 5.6 ms with a new i32x4 SIMD FDCT); the
   Double DCT code is removed
 
-## 0.8.0
+### 0.8.0 (development version)
 
 - JPEG decode output is now identical to libjpeg / libjpeg-turbo (e.g.
   Pillow): islow integer IDCT, "fancy" triangle-filter chroma upsampling
@@ -187,7 +206,7 @@ Other changes:
   instead of ~2000 Double operations) and, on wasm, an i32x4 SIMD IDCT
   (256x256: native 6.3 -> 1.7 ms, js 15.9 -> 6.7 ms, wasm 7.2 -> 2.4 ms)
 
-## 0.7.1
+### 0.7.1 (development version)
 
 - Decoders no longer panic on malformed input; they raise `DecodeError`.
   Found with a new mutation fuzz test (`src/fuzz_wbtest.mbt`) and fixed:
@@ -202,7 +221,7 @@ Other changes:
 - PNG: the output buffer is allocated only after the IDAT size has been
   validated, so a corrupt header cannot trigger a huge allocation
 
-## 0.7.0
+### 0.7.0 (development version)
 
 - JPEG decode: progressive (SOF2) images, including spectral selection
   and successive approximation (DC/AC first and refinement scans) and
@@ -217,7 +236,7 @@ Other changes:
   starts transparent, as in browsers
 - `decode_image` also detects GIF
 
-## 0.6.0
+### 0.6.0 (development version)
 
 - JPEG decode: restart intervals (DRI/RST), SOF1 extended sequential,
   non-interleaved single-component scans; progressive / lossless /
@@ -229,7 +248,7 @@ Other changes:
 - New `decode_ico` / `decode_ico_all` (ICO/CUR, PNG or BMP payloads with
   AND mask) and `decode_image` (PNG / JPEG / BMP / ICO auto-detect)
 
-## 0.5.0
+### 0.5.0 (development version)
 
 - Support the latest MoonBit toolchain (0.10.19+): `#derive`, explicit
   `pub extend` method promotion, `@image.`-qualified black-box tests
