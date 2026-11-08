@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.1
+
+- `encode_avif` is ~25-40% faster with the same compression (64x64: 17 ->
+  9.9 ms native, 51 -> 39 ms js; 512x512: 1.12 -> 0.71 s native, 3.7 -> 2.8 s
+  js): transform types are scored in the transform domain and only the
+  chosen one is reconstructed, row transforms are shared between transform
+  types, zero coefficient rows skip the inverse row transform, and block
+  snapshots cover only the block's decoded-flag region
+
 ## 0.20.0
 
 - `encode_avif(img, quality~ : Int = 75)` is a pure MoonBit AV1 encoder

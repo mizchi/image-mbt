@@ -208,11 +208,8 @@ fn Av1Enc::block_rd(
   let mut best = Av1BlockMode::new()
   // State after the best trial (so it need not be coded again).
   let mut best_state : Av1Snap? = None
-  let k = if cands.length() < av1_mode_candidates {
-    cands.length()
-  } else {
-    av1_mode_candidates
-  }
+  let kmax = av1_mode_candidates
+  let k = if cands.length() < kmax { cands.length() } else { kmax }
   for i in 0..<k {
     let (_, mode, a) = cands[i]
     self.restore(snap)
